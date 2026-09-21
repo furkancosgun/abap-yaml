@@ -336,7 +336,7 @@ CLASS zcl_ayaml IMPLEMENTATION.
       RETURN.
     ENDIF.
     IF     ls_node-type <> zif_ayaml_types=>cs_type-string
-       AND ls_node-type <> zif_ayaml_types=>cs_type-date.
+        AND ls_node-type <> zif_ayaml_types=>cs_type-date.
       CLEAR rv_date.
       RETURN.
     ENDIF.
@@ -452,11 +452,11 @@ CLASS zcl_ayaml IMPLEMENTATION.
     DATA lo_descr  TYPE REF TO cl_abap_typedescr.
 
     IF     iv_node_type IS NOT INITIAL
-       AND iv_node_type <> zif_ayaml_types=>cs_type-boolean
-       AND iv_node_type <> zif_ayaml_types=>cs_type-null
-       AND iv_node_type <> zif_ayaml_types=>cs_type-number
-       AND iv_node_type <> zif_ayaml_types=>cs_type-string
-       AND iv_node_type <> zif_ayaml_types=>cs_type-date.
+        AND iv_node_type <> zif_ayaml_types=>cs_type-boolean
+        AND iv_node_type <> zif_ayaml_types=>cs_type-null
+        AND iv_node_type <> zif_ayaml_types=>cs_type-number
+        AND iv_node_type <> zif_ayaml_types=>cs_type-string
+        AND iv_node_type <> zif_ayaml_types=>cs_type-date.
       RAISE EXCEPTION NEW zcx_ayaml_error( iv_msg = |Unexpected type { iv_node_type }| ).
     ENDIF.
 

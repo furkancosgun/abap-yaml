@@ -68,7 +68,7 @@ CLASS zcl_ayaml_type_utils IMPLEMENTATION.
         TRY.
             DATA(lo_elem) = CAST cl_abap_elemdescr( lo_descr ).
             IF     lo_elem->output_length = 1
-               AND (    lo_descr->absolute_name CS `ABAP_BOOL`
+                AND (    lo_descr->absolute_name CS `ABAP_BOOL`
                      OR lo_descr->absolute_name CS `ABAP_BOOLEAN` ).
               rv_type = zif_ayaml_types=>cs_type-boolean.
               RETURN.

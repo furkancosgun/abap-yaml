@@ -83,10 +83,10 @@ CLASS zcl_ayaml_string_utils IMPLEMENTATION.
       RETURN.
     ENDIF.
     IF    iv_value CS `"` OR iv_value CS `\`
-       OR iv_value CS cl_abap_char_utilities=>horizontal_tab
-       OR iv_value CS cl_abap_char_utilities=>newline
-       OR iv_value CS cl_abap_char_utilities=>cr_lf
-       OR iv_value CS `:` OR iv_value CS `#`.
+        OR iv_value CS cl_abap_char_utilities=>horizontal_tab
+        OR iv_value CS cl_abap_char_utilities=>newline
+        OR iv_value CS cl_abap_char_utilities=>cr_lf
+        OR iv_value CS `:` OR iv_value CS `#`.
       rv_plain = abap_false.
       RETURN.
     ENDIF.

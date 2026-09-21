@@ -537,3 +537,122 @@ CLASS ltcl_ayaml_extended IMPLEMENTATION.
                                         act = mo_cut->get( '/mytab/2' ) ).
   ENDMETHOD.
 ENDCLASS.
+
+
+CLASS ltcl_ayaml_advanced_parser DEFINITION FINAL FOR TESTING
+  DURATION SHORT
+  RISK LEVEL HARMLESS.
+
+  PRIVATE SECTION.
+    METHODS test_odd_indentation FOR TESTING RAISING cx_static_check.
+    METHODS test_multiline_block_scalars FOR TESTING RAISING cx_static_check.
+    METHODS test_flow_mapping_and_sequence FOR TESTING RAISING cx_static_check.
+    METHODS test_anchors_and_merge FOR TESTING RAISING cx_static_check.
+    METHODS test_inline_comments FOR TESTING RAISING cx_static_check.
+    METHODS test_strict_syntax_errors FOR TESTING RAISING cx_static_check.
+
+ENDCLASS.
+
+
+CLASS ltcl_ayaml_advanced_parser IMPLEMENTATION.
+
+  METHOD test_odd_indentation.
+    DATA lv_yaml TYPE string.
+    lv_yaml =
+      |root:\n| &&
+      |   child1: value1\n| &&
+      |   child2:\n| &&
+      |      deep: deep_val|.
+
+    DATA(li_yaml) = zcl_ayaml=>parse( lv_yaml ).
+    cl_abap_unit_assert=>assert_equals( exp = 'value1'
+                                        act = li_yaml->get( '/root/child1' ) ).
+    cl_abap_unit_assert=>assert_equals( exp = 'deep_val'
+                                        act = li_yaml->get( '/root/child2/deep' ) ).
+  ENDMETHOD.
+
+  METHOD test_multiline_block_scalars.
+    DATA lv_yaml TYPE string.
+    lv_yaml =
+      `lit: |` && cl_abap_char_utilities=>newline &&
+      `  hello` && cl_abap_char_utilities=>newline &&
+      `  world` && cl_abap_char_utilities=>newline &&
+      `fold: >` && cl_abap_char_utilities=>newline &&
+      `  hello` && cl_abap_char_utilities=>newline &&
+      `  world`.
+
+    DATA(li_yaml) = zcl_ayaml=>parse( lv_yaml ).
+    DATA(lv_lit) = li_yaml->get( '/lit' ).
+    DATA(lv_fold) = li_yaml->get( '/fold' ).
+
+    cl_abap_unit_assert=>assert_true( xsdbool( lv_lit CS 'hello' AND lv_lit CS 'world' ) ).
+    cl_abap_unit_assert=>assert_true( xsdbool( lv_fold CS 'hello world' ) ).
+  ENDMETHOD.
+
+  METHOD test_flow_mapping_and_sequence.
+    DATA lv_yaml TYPE string.
+    lv_yaml =
+      `server: { host: localhost, port: 8080 }` && cl_abap_char_utilities=>newline &&
+      `items: [ alpha, beta, gamma ]`.
+
+    DATA(li_yaml) = zcl_ayaml=>parse( lv_yaml ).
+    cl_abap_unit_assert=>assert_equals( exp = 'localhost'
+                                        act = li_yaml->get( '/server/host' ) ).
+    cl_abap_unit_assert=>assert_equals( exp = 8080
+                                        act = li_yaml->get_integer( '/server/port' ) ).
+    cl_abap_unit_assert=>assert_equals( exp = 'alpha'
+                                        act = li_yaml->get( '/items/1' ) ).
+    cl_abap_unit_assert=>assert_equals( exp = 'gamma'
+                                        act = li_yaml->get( '/items/3' ) ).
+  ENDMETHOD.
+
+  METHOD test_anchors_and_merge.
+    DATA lv_yaml TYPE string.
+    lv_yaml =
+      |default: &base\n| &&
+      |  host: db.local\n| &&
+      |  port: 5432\n| &&
+      |dev:\n| &&
+      |  <<: *base\n| &&
+      |  database: my_dev_db|.
+
+    DATA(li_yaml) = zcl_ayaml=>parse( lv_yaml ).
+    cl_abap_unit_assert=>assert_equals( exp = 'db.local'
+                                        act = li_yaml->get( '/dev/host' ) ).
+    cl_abap_unit_assert=>assert_equals( exp = 5432
+                                        act = li_yaml->get_integer( '/dev/port' ) ).
+    cl_abap_unit_assert=>assert_equals( exp = 'my_dev_db'
+                                        act = li_yaml->get( '/dev/database' ) ).
+  ENDMETHOD.
+
+  METHOD test_inline_comments.
+    DATA lv_yaml TYPE string.
+    lv_yaml =
+      |# Top level comment\n| &&
+      |key1: val1 # inline comment\n| &&
+      |key2: val2|.
+
+    DATA(li_yaml) = zcl_ayaml=>parse( lv_yaml ).
+    cl_abap_unit_assert=>assert_equals( exp = 'val1'
+                                        act = li_yaml->get( '/key1' ) ).
+    cl_abap_unit_assert=>assert_equals( exp = 'val2'
+                                        act = li_yaml->get( '/key2' ) ).
+  ENDMETHOD.
+
+  METHOD test_strict_syntax_errors.
+    TRY.
+        zcl_ayaml=>parse( `'unclosed string` ).
+        cl_abap_unit_assert=>fail( 'Expected syntax error for unclosed single quote' ).
+      CATCH zcx_ayaml_error.
+        " expected
+    ENDTRY.
+
+    TRY.
+        zcl_ayaml=>parse( `key: *undefined_alias` ).
+        cl_abap_unit_assert=>fail( 'Expected error for undefined alias' ).
+      CATCH zcx_ayaml_error.
+        " expected
+    ENDTRY.
+  ENDMETHOD.
+
+ENDCLASS.
