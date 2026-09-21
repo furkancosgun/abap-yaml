@@ -6,17 +6,15 @@ CLASS zcl_ayaml DEFINITION PUBLIC FINAL CREATE PRIVATE.
     CLASS-METHODS create_empty
       RETURNING VALUE(ro_instance) TYPE REF TO zif_ayaml.
 
-    CLASS-METHODS parse
+    CLASS-METHODS create_from_yaml
       IMPORTING iv_yaml            TYPE string
       RETURNING VALUE(ro_instance) TYPE REF TO zif_ayaml
       RAISING   zcx_ayaml_error.
 
-    CLASS-METHODS from_abap
-      IMPORTING iv_data         TYPE any
-                iv_format       TYPE zif_ayaml_types=>ty_format OPTIONAL
-                iv_indent       TYPE i                          DEFAULT 0
-                iv_ignore_empty TYPE abap_bool                  DEFAULT abap_false
-      RETURNING VALUE(rv_yaml)  TYPE string
+    CLASS-METHODS create_from_abap
+      IMPORTING iv_data            TYPE any
+                iv_format          TYPE zif_ayaml_types=>ty_format OPTIONAL
+      RETURNING VALUE(ro_instance) TYPE REF TO zif_ayaml
       RAISING   zcx_ayaml_error.
 
   PRIVATE SECTION.
@@ -73,7 +71,7 @@ CLASS zcl_ayaml IMPLEMENTATION.
     CREATE OBJECT ro_instance TYPE zcl_ayaml.
   ENDMETHOD.
 
-  METHOD parse.
+  METHOD create_from_yaml.
     DATA lo_scanner TYPE REF TO lcl_scanner.
     DATA lt_tokens  TYPE zif_ayaml_types=>ty_t_tokens.
     DATA lo_parser  TYPE REF TO lcl_ast_parser.
@@ -94,7 +92,7 @@ CLASS zcl_ayaml IMPLEMENTATION.
       EXPORTING it_nodes = lt_nodes.
   ENDMETHOD.
 
-  METHOD from_abap.
+  METHOD create_from_abap.
     DATA lo_descr TYPE REF TO cl_abap_typedescr.
     DATA lo_ayaml TYPE REF TO zcl_ayaml.
 
@@ -106,19 +104,17 @@ CLASS zcl_ayaml IMPLEMENTATION.
                                iv_value  = iv_data
                                iv_format = iv_format ).
     ELSE.
-      lo_ayaml->zif_ayaml~set( iv_path         = `/value`
-                               iv_value        = iv_data
-                               iv_ignore_empty = iv_ignore_empty ).
+      lo_ayaml->zif_ayaml~set( iv_path  = `/value`
+                               iv_value = iv_data ).
     ENDIF.
 
-    rv_yaml = lo_ayaml->zif_ayaml~to_yaml( iv_indent ).
+    ro_instance = lo_ayaml.
   ENDMETHOD.
 
   METHOD set_typed.
-    zif_ayaml~set( iv_path         = iv_path
-                   iv_value        = iv_value
-                   iv_node_type    = iv_type
-                   iv_ignore_empty = abap_false ).
+    zif_ayaml~set( iv_path      = iv_path
+                   iv_value     = iv_value
+                   iv_node_type = iv_type ).
     ro_instance = me.
   ENDMETHOD.
 
@@ -208,7 +204,7 @@ CLASS zcl_ayaml IMPLEMENTATION.
         ASSIGN iv_value TO <fs_table>.
         IF sy-subrc = 0.
           IF iv_path IS NOT INITIAL.
-            zif_ayaml~touch_array( iv_path  = iv_path
+            zif_ayaml~init_array( iv_path  = iv_path
                                    iv_clear = abap_true ).
           ENDIF.
           lv_idx = 0.
@@ -237,7 +233,7 @@ CLASS zcl_ayaml IMPLEMENTATION.
                 <fs_item_node>-index = lv_idx.
               ENDIF.
             ELSEIF iv_path IS INITIAL.
-              zif_ayaml~touch_array( `/` ).
+              zif_ayaml~init_array( `/` ).
               zif_ayaml~push( iv_path  = `/`
                               iv_value = <fs_line> ).
             ELSE.
@@ -306,14 +302,14 @@ CLASS zcl_ayaml IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD zif_ayaml~is_empty.
-    rv_yes = boolc( lines( mt_nodes ) = 0 ).
+    rv_result = boolc( lines( mt_nodes ) = 0 ).
   ENDMETHOD.
 
   METHOD zif_ayaml~exists.
     DATA ls_node TYPE zif_ayaml_types=>ty_s_node.
 
     ls_node = get_node_internal( iv_path ).
-    rv_yes = boolc( ls_node-path IS NOT INITIAL OR ls_node-name IS NOT INITIAL ).
+    rv_result = boolc( ls_node-path IS NOT INITIAL OR ls_node-name IS NOT INITIAL ).
   ENDMETHOD.
 
   METHOD zif_ayaml~get.
@@ -493,7 +489,7 @@ CLASS zcl_ayaml IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD zif_ayaml~get_node.
-    rs_node = get_node_internal( iv_path ).
+    rs_result = get_node_internal( iv_path ).
   ENDMETHOD.
 
   METHOD zif_ayaml~get_node_type.
@@ -503,7 +499,7 @@ CLASS zcl_ayaml IMPLEMENTATION.
     rv_result = ls_node-type.
   ENDMETHOD.
 
-  METHOD zif_ayaml~members.
+  METHOD zif_ayaml~get_keys.
     DATA lv_norm TYPE string.
     FIELD-SYMBOLS <fs_node> TYPE zif_ayaml_types=>ty_s_node.
 
@@ -513,11 +509,11 @@ CLASS zcl_ayaml IMPLEMENTATION.
     ENDIF.
 
     LOOP AT mt_nodes ASSIGNING <fs_node> USING KEY path_key WHERE path = lv_norm.
-      INSERT <fs_node>-name INTO TABLE rt_keys.
+      INSERT <fs_node>-name INTO TABLE rt_result.
     ENDLOOP.
   ENDMETHOD.
 
-  METHOD zif_ayaml~array_length.
+  METHOD zif_ayaml~get_array_length.
     DATA lv_norm TYPE string.
     DATA lv_cnt  TYPE i.
 
@@ -527,7 +523,7 @@ CLASS zcl_ayaml IMPLEMENTATION.
     LOOP AT mt_nodes TRANSPORTING NO FIELDS USING KEY path_key WHERE path = lv_norm.
       lv_cnt = lv_cnt + 1.
     ENDLOOP.
-    rv_length = lv_cnt.
+    rv_result = lv_cnt.
   ENDMETHOD.
 
   METHOD zif_ayaml~get_string_table.
@@ -543,7 +539,7 @@ CLASS zcl_ayaml IMPLEMENTATION.
     ENDLOOP.
     SORT lt_children BY order.
     LOOP AT lt_children ASSIGNING <fs_child>.
-      INSERT <fs_child>-value INTO TABLE rt_values.
+      INSERT <fs_child>-value INTO TABLE rt_result.
     ENDLOOP.
   ENDMETHOD.
 
@@ -553,8 +549,8 @@ CLASS zcl_ayaml IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD zif_ayaml~to_yaml.
-    rv_yaml = lcl_serializer=>stringify( it_nodes  = mt_nodes
-                                         iv_indent = iv_indent ).
+    rv_result = lcl_serializer=>stringify( it_nodes  = mt_nodes
+                                           iv_indent = iv_indent ).
   ENDMETHOD.
 
   METHOD zif_ayaml~slice.
@@ -620,11 +616,6 @@ CLASS zcl_ayaml IMPLEMENTATION.
     DATA lo_descr  TYPE REF TO cl_abap_typedescr.
     DATA ls_node   TYPE zif_ayaml_types=>ty_s_node.
     FIELD-SYMBOLS <fs_node> TYPE zif_ayaml_types=>ty_s_node.
-
-    IF iv_ignore_empty = abap_true AND iv_value IS INITIAL.
-      ro_instance = me.
-      RETURN.
-    ENDIF.
 
     lo_descr = cl_abap_typedescr=>describe_by_data( iv_value ).
     IF lo_descr->kind = cl_abap_typedescr=>kind_struct OR lo_descr->kind = cl_abap_typedescr=>kind_table.
@@ -763,7 +754,7 @@ CLASS zcl_ayaml IMPLEMENTATION.
     ro_instance = me.
   ENDMETHOD.
 
-  METHOD zif_ayaml~touch_array.
+  METHOD zif_ayaml~init_array.
     DATA lv_parent TYPE string.
     DATA lv_name   TYPE string.
     DATA lt_keep   TYPE zif_ayaml_types=>ty_t_nodes.

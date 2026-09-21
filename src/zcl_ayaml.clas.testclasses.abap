@@ -43,7 +43,7 @@ CLASS ltcl_ayaml_master_suite IMPLEMENTATION.
       |  bool: true\n| &&
       |  false: false|.
 
-    lo_r = zcl_ayaml=>parse( lv_yaml ).
+    lo_r = zcl_ayaml=>create_from_yaml( lv_yaml ).
 
     cl_abap_unit_assert=>assert_equals( exp = '1'
                                         act = lo_r->get( '/success' ) ).
@@ -70,7 +70,7 @@ CLASS ltcl_ayaml_master_suite IMPLEMENTATION.
       |payload:\n| &&
       |  date: 2020-07-28|.
 
-    lo_r = zcl_ayaml=>parse( lv_yaml ).
+    lo_r = zcl_ayaml=>create_from_yaml( lv_yaml ).
 
     cl_abap_unit_assert=>assert_equals( exp = '2020-07-28'
                                         act = lo_r->get( '/payload/date' ) ).
@@ -86,7 +86,7 @@ CLASS ltcl_ayaml_master_suite IMPLEMENTATION.
       |payload:\n| &&
       |  null_val: null|.
 
-    lo_r = zcl_ayaml=>parse( lv_yaml ).
+    lo_r = zcl_ayaml=>create_from_yaml( lv_yaml ).
 
     cl_abap_unit_assert=>assert_equals( exp = 'null'
                                         act = lo_r->get( '/payload/null_val' ) ).
@@ -116,20 +116,11 @@ CLASS ltcl_ayaml_master_suite IMPLEMENTATION.
                  iv_value = abap_false ).
     mo_cut->set( iv_path  = '/empty_num'
                  iv_value = 0 ).
-    cl_abap_unit_assert=>assert_false( mo_cut->exists( '/empty_bool' ) ).
-    cl_abap_unit_assert=>assert_false( mo_cut->exists( '/empty_num' ) ).
-
-    mo_cut->set( iv_ignore_empty = abap_false
-                 iv_path         = '/keep_bool'
-                 iv_value        = abap_false ).
-    mo_cut->set( iv_ignore_empty = abap_false
-                 iv_path         = '/keep_num'
-                 iv_value        = 0 ).
-    cl_abap_unit_assert=>assert_true( mo_cut->exists( '/keep_bool' ) ).
-    cl_abap_unit_assert=>assert_true( mo_cut->exists( '/keep_num' ) ).
-    cl_abap_unit_assert=>assert_false( mo_cut->get_boolean( '/keep_bool' ) ).
+    cl_abap_unit_assert=>assert_true( mo_cut->exists( '/empty_bool' ) ).
+    cl_abap_unit_assert=>assert_true( mo_cut->exists( '/empty_num' ) ).
+    cl_abap_unit_assert=>assert_false( mo_cut->get_boolean( '/empty_bool' ) ).
     cl_abap_unit_assert=>assert_equals( exp = 0
-                                        act = mo_cut->get_integer( '/keep_num' ) ).
+                                        act = mo_cut->get_integer( '/empty_num' ) ).
   ENDMETHOD.
 
   METHOD test_escaping.
@@ -146,7 +137,7 @@ CLASS ltcl_ayaml_master_suite IMPLEMENTATION.
     cl_abap_unit_assert=>assert_char_cp( exp = '*escaping\"\\*'
                                          act = lv_yaml ).
 
-    lo_parsed = zcl_ayaml=>parse( lv_yaml ).
+    lo_parsed = zcl_ayaml=>create_from_yaml( lv_yaml ).
 
     lv_output = lo_parsed->get( '/esc' ).
     cl_abap_unit_assert=>assert_equals( exp = lv_input
@@ -188,7 +179,7 @@ CLASS ltcl_ayaml_master_suite IMPLEMENTATION.
     cl_abap_unit_assert=>assert_equals( exp = zif_ayaml_types=>cs_type-null
                                         act = mo_cut->get_node_type( '/n' ) ).
 
-    mo_cut->touch_array( '/arr' ).
+    mo_cut->init_array( '/arr' ).
     mo_cut->push( iv_path  = '/arr'
                   iv_value = 'abc' ).
     mo_cut->push( iv_path  = '/arr'
@@ -200,7 +191,7 @@ CLASS ltcl_ayaml_master_suite IMPLEMENTATION.
     cl_abap_unit_assert=>assert_char_cp( exp = '*- abc*'
                                          act = lv_yaml ).
 
-    lo_parsed = zcl_ayaml=>parse( lv_yaml ).
+    lo_parsed = zcl_ayaml=>create_from_yaml( lv_yaml ).
     cl_abap_unit_assert=>assert_equals( exp = 'abc'
                                         act = lo_parsed->get( '/arr/1' ) ).
     cl_abap_unit_assert=>assert_equals( exp = 123
@@ -210,7 +201,7 @@ CLASS ltcl_ayaml_master_suite IMPLEMENTATION.
     cl_abap_unit_assert=>assert_true( mo_cut->is_empty( ) ).
 
     lv_yaml = |n: null\n|.
-    mo_cut = zcl_ayaml=>parse( lv_yaml ).
+    mo_cut = zcl_ayaml=>create_from_yaml( lv_yaml ).
     cl_abap_unit_assert=>assert_equals( exp = 'null'
                                         act = mo_cut->get( '/n' ) ).
   ENDMETHOD.
@@ -252,7 +243,7 @@ CLASS ltcl_ayaml_extended IMPLEMENTATION.
     mo_cut->set( iv_path  = '/a/z'
                  iv_value = '3' ).
 
-    lt_members = mo_cut->members( '/a' ).
+    lt_members = mo_cut->get_keys( '/a' ).
     cl_abap_unit_assert=>assert_equals( exp = 3
                                         act = lines( lt_members ) ).
 
@@ -260,13 +251,13 @@ CLASS ltcl_ayaml_extended IMPLEMENTATION.
     cl_abap_unit_assert=>assert_true( boolc( sy-subrc = 0 ) ).
     mo_cut->delete( '/a/y' ).
     cl_abap_unit_assert=>assert_false( mo_cut->exists( '/a/y' ) ).
-    lt_members = mo_cut->members( '/a' ).
+    lt_members = mo_cut->get_keys( '/a' ).
     cl_abap_unit_assert=>assert_equals( exp = 2
                                         act = lines( lt_members ) ).
     mo_cut->delete( '/a' ).
     cl_abap_unit_assert=>assert_false( mo_cut->exists( '/a/x' ) ).
     cl_abap_unit_assert=>assert_equals( exp = 0
-                                        act = lines( mo_cut->members( '/' ) ) ).
+                                        act = lines( mo_cut->get_keys( '/' ) ) ).
   ENDMETHOD.
 
   METHOD test_slice_and_clone_indep.
@@ -313,7 +304,7 @@ CLASS ltcl_ayaml_extended IMPLEMENTATION.
                                         act = mo_cut->get( '/struct/field1' ) ).
     cl_abap_unit_assert=>assert_equals( exp = 42
                                         act = mo_cut->get_integer( '/struct/field2' ) ).
-    mo_cut->touch_array( '/arr2' ).
+    mo_cut->init_array( '/arr2' ).
     mo_cut->push( iv_path  = '/arr2'
                   iv_value = ls_struct ).
 
@@ -322,8 +313,8 @@ CLASS ltcl_ayaml_extended IMPLEMENTATION.
                                          act = lv_yaml ).
     cl_abap_unit_assert=>assert_char_cp( exp = '*field1:*'
                                          act = lv_yaml ).
-    mo_cut->touch_array( iv_path  = '/empty_arr'
-                         iv_clear = abap_true ).
+    mo_cut->init_array( iv_path  = '/empty_arr'
+                        iv_clear = abap_true ).
     lv_yaml = mo_cut->to_yaml( ).
     cl_abap_unit_assert=>assert_char_cp( exp = '*empty_arr:*[]*'
                                          act = lv_yaml ).
@@ -363,7 +354,7 @@ CLASS ltcl_ayaml_extended IMPLEMENTATION.
                                             iv_name   = 'root' ).
     cl_abap_unit_assert=>assert_equals( exp = '/root'
                                         act = lv_built ).
-    mo_cut->touch_array( '/myseq' ).
+    mo_cut->init_array( '/myseq' ).
 
     mo_cut->set( iv_path  = '/tmp'
                  iv_value = 'x' ).
@@ -446,7 +437,7 @@ CLASS ltcl_ayaml_extended IMPLEMENTATION.
 
     lv_yaml = |seq: [a, b, 123]\nplain: hello|.
 
-    lo_doc = zcl_ayaml=>parse( lv_yaml ).
+    lo_doc = zcl_ayaml=>create_from_yaml( lv_yaml ).
     cl_abap_unit_assert=>assert_equals( exp = 'a'
                                         act = lo_doc->get( '/seq/1' ) ).
     cl_abap_unit_assert=>assert_equals( exp = 'b'
@@ -468,7 +459,7 @@ CLASS ltcl_ayaml_extended IMPLEMENTATION.
       |  - id: 2\n| &&
       |    name: two\n|.
 
-    lo_doc = zcl_ayaml=>parse( lv_yaml ).
+    lo_doc = zcl_ayaml=>create_from_yaml( lv_yaml ).
     cl_abap_unit_assert=>assert_equals( exp = 1
                                         act = lo_doc->get_integer( '/items/1/id' ) ).
     cl_abap_unit_assert=>assert_equals( exp = 'one'
@@ -498,15 +489,15 @@ CLASS ltcl_ayaml_extended IMPLEMENTATION.
     cl_abap_unit_assert=>assert_char_cp( exp = '*a:*'
                                          act = lv_yaml ).
     mo_cut->clear( ).
-    mo_cut->touch_array( '/arr' ).
-    mo_cut->touch_array( '/arr/1' ).
+    mo_cut->init_array( '/arr' ).
+    mo_cut->init_array( '/arr/1' ).
     mo_cut->push( iv_path  = '/arr/1'
                   iv_value = 'nested' ).
     lv_yaml = mo_cut->to_yaml( ).
     cl_abap_unit_assert=>assert_char_cp( exp = '*arr:*'
                                          act = lv_yaml ).
     mo_cut->clear( ).
-    mo_cut->touch_array( '/arr' ).
+    mo_cut->init_array( '/arr' ).
     lv_yaml = mo_cut->to_yaml( ).
     cl_abap_unit_assert=>assert_char_cp( exp = '*arr: []*'
                                          act = lv_yaml ).
@@ -604,7 +595,7 @@ CLASS ltcl_ayaml_advanced_parser IMPLEMENTATION.
       |   child2:\n| &&
       |      deep: deep_val|.
 
-    lo_yaml = zcl_ayaml=>parse( lv_yaml ).
+    lo_yaml = zcl_ayaml=>create_from_yaml( lv_yaml ).
     cl_abap_unit_assert=>assert_equals( exp = 'value1'
                                         act = lo_yaml->get( '/root/child1' ) ).
     cl_abap_unit_assert=>assert_equals( exp = 'deep_val'
@@ -625,7 +616,7 @@ CLASS ltcl_ayaml_advanced_parser IMPLEMENTATION.
       |  hello{ cl_abap_char_utilities=>newline }| &&
       |  world|.
 
-    lo_yaml = zcl_ayaml=>parse( lv_yaml ).
+    lo_yaml = zcl_ayaml=>create_from_yaml( lv_yaml ).
 
     lv_lit = lo_yaml->get( '/lit' ).
 
@@ -643,7 +634,7 @@ CLASS ltcl_ayaml_advanced_parser IMPLEMENTATION.
       |server: \{ host: localhost, port: 8080 \}{ cl_abap_char_utilities=>newline }| &&
       |items: [ alpha, beta, gamma ]|.
 
-    lo_yaml = zcl_ayaml=>parse( lv_yaml ).
+    lo_yaml = zcl_ayaml=>create_from_yaml( lv_yaml ).
     cl_abap_unit_assert=>assert_equals( exp = 'localhost'
                                         act = lo_yaml->get( '/server/host' ) ).
     cl_abap_unit_assert=>assert_equals( exp = 8080
@@ -666,7 +657,7 @@ CLASS ltcl_ayaml_advanced_parser IMPLEMENTATION.
       |  <<: *base\n| &&
       |  database: my_dev_db|.
 
-    lo_yaml = zcl_ayaml=>parse( lv_yaml ).
+    lo_yaml = zcl_ayaml=>create_from_yaml( lv_yaml ).
     cl_abap_unit_assert=>assert_equals( exp = 'db.local'
                                         act = lo_yaml->get( '/dev/host' ) ).
     cl_abap_unit_assert=>assert_equals( exp = 5432
@@ -684,7 +675,7 @@ CLASS ltcl_ayaml_advanced_parser IMPLEMENTATION.
       |key1: val1 # inline comment\n| &&
       |key2: val2|.
 
-    lo_yaml = zcl_ayaml=>parse( lv_yaml ).
+    lo_yaml = zcl_ayaml=>create_from_yaml( lv_yaml ).
     cl_abap_unit_assert=>assert_equals( exp = 'val1'
                                         act = lo_yaml->get( '/key1' ) ).
     cl_abap_unit_assert=>assert_equals( exp = 'val2'
@@ -693,13 +684,13 @@ CLASS ltcl_ayaml_advanced_parser IMPLEMENTATION.
 
   METHOD test_strict_syntax_errors.
     TRY.
-        zcl_ayaml=>parse( `'unclosed string` ).
+        zcl_ayaml=>create_from_yaml( `'unclosed string` ).
         cl_abap_unit_assert=>fail( 'Expected syntax error for unclosed single quote' ).
       CATCH zcx_ayaml_error.
     ENDTRY.
 
     TRY.
-        zcl_ayaml=>parse( `key: *undefined_alias` ).
+        zcl_ayaml=>create_from_yaml( `key: *undefined_alias` ).
         cl_abap_unit_assert=>fail( 'Expected error for undefined alias' ).
       CATCH zcx_ayaml_error.
     ENDTRY.
@@ -727,7 +718,7 @@ CLASS ltcl_ayaml_new_architecture IMPLEMENTATION.
     DATA lo_yaml   TYPE REF TO zif_ayaml.
     DATA lo_reader LIKE lo_yaml.
 
-    lo_yaml = zcl_ayaml=>parse( |title: Book\npages: 350\nactive: true| ).
+    lo_yaml = zcl_ayaml=>create_from_yaml( |title: Book\npages: 350\nactive: true| ).
 
     lo_reader = lo_yaml.
 
@@ -750,7 +741,7 @@ CLASS ltcl_ayaml_new_architecture IMPLEMENTATION.
 
     lo_writer->set_string( iv_path  = '/user/name'
                            iv_value = 'Alice' ).
-    lo_writer->touch_array( '/user/roles' ).
+    lo_writer->init_array( '/user/roles' ).
     lo_writer->push( iv_path  = '/user/roles'
                      iv_value = 'admin' ).
     lo_writer->push( iv_path  = '/user/roles'
@@ -759,7 +750,7 @@ CLASS ltcl_ayaml_new_architecture IMPLEMENTATION.
     cl_abap_unit_assert=>assert_equals( exp = 'Alice'
                                         act = lo_yaml->get_string( '/user/name' ) ).
     cl_abap_unit_assert=>assert_equals( exp = 2
-                                        act = lo_yaml->array_length( '/user/roles' ) ).
+                                        act = lo_yaml->get_array_length( '/user/roles' ) ).
     cl_abap_unit_assert=>assert_equals( exp = 'admin'
                                         act = lo_yaml->get_string( '/user/roles/1' ) ).
   ENDMETHOD.
@@ -792,7 +783,7 @@ CLASS ltcl_ayaml_new_architecture IMPLEMENTATION.
       |  age: 29\n| &&
       |  admin: true|.
 
-    lo_yaml = zcl_ayaml=>parse( lv_yaml ).
+    lo_yaml = zcl_ayaml=>create_from_yaml( lv_yaml ).
     lo_yaml->to_abap( IMPORTING ev_data = ls_config ).
 
     cl_abap_unit_assert=>assert_equals( exp = 'localhost'
@@ -813,7 +804,7 @@ CLASS ltcl_ayaml_new_architecture IMPLEMENTATION.
       |  age: 30\n| &&
       |  admin: true|.
 
-    lo_yaml = zcl_ayaml=>parse( lv_yaml ).
+    lo_yaml = zcl_ayaml=>create_from_yaml( lv_yaml ).
     lo_yaml->to_abap( IMPORTING ev_data = lt_users ).
 
     cl_abap_unit_assert=>assert_equals( exp = 2
@@ -861,7 +852,7 @@ CLASS ltcl_ayaml_new_architecture IMPLEMENTATION.
     FIELD-SYMBOLS <fs_fruit> LIKE LINE OF lt_fruits.
 
     lo_yaml = zcl_ayaml=>create_empty( ).
-    lo_yaml->touch_array( '/fruits' ).
+    lo_yaml->init_array( '/fruits' ).
     lo_yaml->push( iv_path  = '/fruits'
                    iv_value = 'apple' ).
     lo_yaml->push( iv_path  = '/fruits'
@@ -870,7 +861,7 @@ CLASS ltcl_ayaml_new_architecture IMPLEMENTATION.
                    iv_value = 'orange' ).
 
     cl_abap_unit_assert=>assert_equals( exp = 3
-                                        act = lo_yaml->array_length( '/fruits' ) ).
+                                        act = lo_yaml->get_array_length( '/fruits' ) ).
 
     lt_fruits = lo_yaml->get_string_table( '/fruits' ).
     cl_abap_unit_assert=>assert_equals( exp = 3
@@ -910,8 +901,8 @@ CLASS ltcl_ayaml_new_architecture IMPLEMENTATION.
     ls_user-phone_number = '555-1234'.
     ls_user-is_active    = abap_true.
 
-    lv_yaml = zcl_ayaml=>from_abap( iv_data   = ls_user
-                                    iv_format = zif_ayaml_types=>cs_format-camel_case ).
+    lv_yaml = zcl_ayaml=>create_from_abap( iv_data   = ls_user
+                                           iv_format = zif_ayaml_types=>cs_format-camel_case )->to_yaml( ).
 
     cl_abap_unit_assert=>assert_char_cp( exp = '*firstName: John*'
                                          act = lv_yaml ).
@@ -932,8 +923,8 @@ CLASS ltcl_ayaml_new_architecture IMPLEMENTATION.
     ls_settings-max_connections = 100.
     ls_settings-api_token       = 'secret'.
 
-    lv_yaml = zcl_ayaml=>from_abap( iv_data   = ls_settings
-                                    iv_format = zif_ayaml_types=>cs_format-snake_case ).
+    lv_yaml = zcl_ayaml=>create_from_abap( iv_data   = ls_settings
+                                           iv_format = zif_ayaml_types=>cs_format-snake_case )->to_yaml( ).
 
     cl_abap_unit_assert=>assert_char_cp( exp = '*max_connections: 100*'
                                          act = lv_yaml ).
@@ -961,8 +952,8 @@ CLASS ltcl_ayaml_new_architecture IMPLEMENTATION.
     ls_items-item_name = 'Beta'.
     INSERT ls_items INTO TABLE lt_items.
 
-    lv_yaml = zcl_ayaml=>from_abap( iv_data   = lt_items
-                                    iv_format = zif_ayaml_types=>cs_format-camel_case ).
+    lv_yaml = zcl_ayaml=>create_from_abap( iv_data   = lt_items
+                                           iv_format = zif_ayaml_types=>cs_format-camel_case )->to_yaml( ).
 
     cl_abap_unit_assert=>assert_char_cp( exp = '*- itemId: 1*'
                                          act = lv_yaml ).
@@ -986,7 +977,7 @@ CLASS ltcl_ayaml_new_architecture IMPLEMENTATION.
       |last_name: Smith\n| &&
       |USER_AGE: 28\n|.
 
-    lo_yaml = zcl_ayaml=>parse( lv_yaml ).
+    lo_yaml = zcl_ayaml=>create_from_yaml( lv_yaml ).
     lo_yaml->to_abap( IMPORTING ev_data = ls_payload ).
 
     cl_abap_unit_assert=>assert_equals( exp = 'Alice'
@@ -1012,10 +1003,10 @@ CLASS ltcl_ayaml_new_architecture IMPLEMENTATION.
     ls_in-server_port = 443.
     ls_in-is_secured  = abap_true.
 
-    lv_yaml = zcl_ayaml=>from_abap( iv_data   = ls_in
-                                    iv_format = zif_ayaml_types=>cs_format-camel_case ).
+    lv_yaml = zcl_ayaml=>create_from_abap( iv_data   = ls_in
+                                           iv_format = zif_ayaml_types=>cs_format-camel_case )->to_yaml( ).
 
-    lo_yaml = zcl_ayaml=>parse( lv_yaml ).
+    lo_yaml = zcl_ayaml=>create_from_yaml( lv_yaml ).
     lo_yaml->to_abap( IMPORTING ev_data = ls_out ).
 
     cl_abap_unit_assert=>assert_equals( exp = ls_in-server_host
