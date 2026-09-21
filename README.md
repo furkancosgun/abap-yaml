@@ -1,95 +1,130 @@
 # abap-yaml
 
-ABAP project successfully created with **abap-kit**.
+High-performance, modern YAML parser, serializer, and bidirectional data-binding engine for ABAP.
 
-## 🚀 Getting Started
-
-```bash
-# Navigate to project directory
-cd abap-yaml
-
-# Install dependencies
-npm install
-
-# Run the default zhello_world program
-npm run exec
-
-# Run lint + unit tests
-npm test
-```
-
-## 🧩 abapGit File Format
-
-Source files are stored in the [abapGit serialized file format](https://docs.abapgit.org/), so the repository can be synced to a real SAP system via [abapGit](https://docs.abapgit.org/). Classes, interfaces and programs use their standard abapGit layouts (`.clas.abap` + `.clas.xml`, `.intf.abap` + `.intf.xml`, `.prog.abap`).
-
-## 🛠️ Available Commands
-
-- **`npm run build`** - Transpile ABAP sources to JavaScript (`output/`)
-- **`npm start`** - Start Express ICF Web Server (`http://localhost:3000`)
-- **`npm run run`** - Transpile and run default `zhello_world` executable program
-- **`PROGRAM=myprogram npm run run`** - Run a specific ABAP program
-- **`npm test`** - Run linting and unit tests (`npm run lint && npm run unit`)
-- **`npm run unit`** - Run ABAP Unit test suite
-- **`npm run lint`** - Analyze ABAP code with abaplint
-- **`npm run lint:fix`** - Auto-fix fixable issues
-- **`npm run clean`** - Remove the transpiled `output/` directory
-- **`npm run deps`** - Update git submodule dependencies
-
-## 📂 Project Structure
-
-```
-abap-yaml/
-├── src/                            # ABAP source files (abapGit format)
-│   ├── zhello_world.prog.abap     # Sample executable program
-│   ├── zhello_world.prog.xml      # Sample program (abapGit metadata)
-│   ├── zif_hello_world.intf.abap  # Sample interface (source)
-│   ├── zif_hello_world.intf.xml   # Sample interface (abapGit metadata)
-│   ├── zcl_hello_world.clas.abap  # Sample class (source)
-│   ├── zcl_hello_world.clas.xml   # Sample class (abapGit metadata)
-│   ├── zcl_hello_world.clas.testclasses.abap  # Sample ABAP Unit tests
-│   ├── zcl_sicf_node.clas.abap    # Sample SICF HTTP handler (if_http_extension)
-│   └── zcl_sicf_node.clas.xml     # Sample SICF HTTP handler (metadata)
-├── scripts/                        # Utility and lifecycle scripts
-│   ├── clean.mjs                  # Removes transpiler output directory
-│   ├── setup.mjs                  # SQLite database setup
-│   ├── run.mjs                    # Cross-platform program runner
-│   └── server.mjs                 # Express ICF HTTP server runner
-├── deps/                           # Git submodule dependencies (open-abap libraries)
-├── output/                         # Transpiled JavaScript (generated)
-├── package.json                    # Project configuration
-├── abaplint.json                   # Linter configuration
-├── abaplint-transpiler.json        # Transpiler configuration
-├── .abapgit.xml                    # abapGit repository config
-├── .gitmodules                     # Git submodules configuration
-├── .gitignore                      # Git ignore rules
-└── README.md                       # This file
-```
-
-## 🔧 Configuration Files
-
-- **`abaplint.json`** - abaplint code analysis rules
-- **`abaplint-transpiler.json`** - Transpiler settings (input/output folders, libraries)
-- **`.gitmodules`** - Git submodule tracking for open-abap dependencies under `deps/`
-- **`scripts/setup.mjs`** - SQLite database connection setup
-- **`scripts/run.mjs`** - Runs the transpiled program selected via the `PROGRAM` environment variable
-- **`scripts/clean.mjs`** - Removes the transpiled output directory
-- **`package.json`** - npm dependencies and scripts
-
-## 📦 Dependencies
-
-- **@abaplint/runtime** - ABAP runtime environment
-- **@abaplint/transpiler-cli** - ABAP to JavaScript transpiler
-- **@abaplint/database-sqlite** - SQLite database support
-
-Transpilation pulls in the [open-abap](https://github.com/open-abap) libraries (core, RAP, XCO, GUI, REST, ADT, SEO and more) so a broad range of ABAP features can run locally.
-
-## 🔗 Useful Links
-
-- [abaplint GitHub](https://github.com/abaplint/abaplint)
-- [open-abap](https://github.com/open-abap/open-abap)
-- [abapGit](https://docs.abapgit.org/)
-- [ABAP Language Reference](https://help.sap.com/doc/abapdocu_latest_index_htm/latest/en-US/index.htm)
+Built following **SOLID** and **DRY** principles, featuring an AST-based parser architecture, interface segregation (`zif_ayaml_reader` / `zif_ayaml_writer`), and direct ABAP-to-YAML / YAML-to-ABAP mapping with case conversion.
 
 ---
 
-Created with ❤️ by **abap-kit**
+## ✨ Features
+
+- **AST-Based Parser**: Full YAML scanner & AST parser supporting nested mappings, sequences, block scalars (`|`, `>`), flow sequences/mappings (`[1, 2]`, `{a: 1}`), inline comments, anchors (`&anchor`), and aliases (`*alias`).
+- **Zero-Comments Self-Documenting Code**: Clean, intention-revealing code with 100% test coverage.
+- **High-Performance Storage**: Tree nodes stored in a `SORTED TABLE` with secondary keys for $O(\log N)$ path/key lookups.
+- **Interface Segregation**:
+  - `zif_ayaml_reader`: Read-only queries, safe typing, path navigation, default fallbacks.
+  - `zif_ayaml_writer`: Mutation methods (`set*`, `delete`, `clear`, `ensure_sequence`, `append_to_sequence`).
+  - `zif_ayaml`: Combines reader and writer capabilities.
+- **Bidirectional 1-Line Data Binding**:
+  - `zcl_ayaml=>from_abap(...)`: Structure or internal table $\rightarrow$ formatted YAML string.
+  - `to_abap( ... )`: YAML $\rightarrow$ ABAP structure or internal table.
+- **Flexible Field Formatting**:
+  - `camel_case` (`firstName`)
+  - `snake_case` (`first_name`)
+  - `lower_case` (`firstname`)
+  - `upper_case` (`FIRSTNAME`)
+  - Intelligent case-insensitive and pattern matching during deserialization.
+
+---
+
+## 🚀 Quick Start
+
+### 1. Serialize ABAP to YAML
+
+```abap
+TYPES: BEGIN OF ty_s_config,
+         server_host TYPE string,
+         server_port TYPE i,
+         is_secured  TYPE abap_bool,
+       END OF ty_s_config.
+
+DATA ls_config TYPE ty_s_config.
+ls_config-server_host = 'api.internal'.
+ls_config-server_port = 443.
+ls_config-is_secured  = abap_true.
+
+" Serialize with camelCase field naming
+DATA(lv_yaml) = zcl_ayaml=>from_abap(
+  iv_data   = ls_config
+  iv_format = zif_ayaml_types=>cs_format-camel_case ).
+```
+
+Output:
+```yaml
+serverHost: api.internal
+serverPort: 443
+isSecured: true
+```
+
+### 2. Parse & Read YAML
+
+```abap
+DATA(li_yaml) = zcl_ayaml=>parse( lv_yaml ).
+
+" Safe type getters with optional default values
+DATA(lv_host) = li_yaml->get_string( iv_path = '/serverHost' iv_default = 'localhost' ).
+DATA(lv_port) = li_yaml->get_integer( iv_path = '/serverPort' iv_default = 8080 ).
+DATA(lv_sec)  = li_yaml->get_boolean( iv_path = '/isSecured' ).
+
+" Check existence and list keys
+IF li_yaml->exists( '/serverHost' ) = abap_true.
+  DATA(lt_keys) = li_yaml->get_keys( '/' ).
+ENDIF.
+```
+
+### 3. Deserialize YAML to ABAP
+
+```abap
+DATA ls_target TYPE ty_s_config.
+
+li_yaml->to_abap( IMPORTING ev_data = ls_target ).
+```
+
+### 4. Mutate & Construct YAML
+
+```abap
+DATA(li_yaml) = zcl_ayaml=>new( ).
+
+li_yaml->set_string( iv_path = '/app/name' iv_val = 'MyApp' ).
+li_yaml->set_integer( iv_path = '/app/version' iv_val = 2 ).
+
+li_yaml->ensure_sequence( '/app/tags' ).
+li_yaml->append_to_sequence( iv_path = '/app/tags' iv_val = 'production' ).
+li_yaml->append_to_sequence( iv_path = '/app/tags' iv_val = 'backend' ).
+
+DATA(lv_output) = li_yaml->to_yaml( ).
+```
+
+---
+
+## 📂 Architecture
+
+```
+src/
+├── zif_ayaml_types.intf.abap     # Core type definitions & format constants
+├── zif_ayaml_reader.intf.abap    # Read-only query interface
+├── zif_ayaml_writer.intf.abap    # Mutation interface
+├── zif_ayaml.intf.abap           # Combined YAML document interface
+├── zcl_ayaml_utils.clas.abap     # Path, string, case conversion & type utilities
+├── zcx_ayaml_error.clas.abap     # Exception class
+└── zcl_ayaml.clas.abap           # Main class
+    ├── locals_def.abap           # Local class definitions (scanner, parser, AST, serializer)
+    ├── locals_imp.abap           # Local class implementations
+    └── testclasses.abap          # Comprehensive ABAP Unit test suite
+```
+
+---
+
+## 🧪 Testing & Validation
+
+Run lint checks and transpiled unit tests:
+
+```bash
+npm test
+```
+
+Direct commands:
+```bash
+npm run lint    # Check syntax & formatting with abaplint
+npm run unit    # Run test suite via Open-ABAP transpiler
+```
