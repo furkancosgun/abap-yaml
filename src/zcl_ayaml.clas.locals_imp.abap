@@ -1,5 +1,4 @@
 CLASS lcl_ast_node IMPLEMENTATION.
-
   METHOD constructor.
     mv_type   = iv_node_type.
     mv_value  = iv_value.
@@ -53,42 +52,45 @@ CLASS lcl_ast_node IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD get_child_by_key.
-    DATA lo_child TYPE REF TO lcl_ast_node.
-    LOOP AT mt_children INTO lo_child.
-      IF lo_child->get_key( ) = iv_key.
-        ro_node = lo_child.
+    FIELD-SYMBOLS <fs_child> TYPE REF TO lcl_ast_node.
+
+    LOOP AT mt_children ASSIGNING <fs_child>.
+      IF <fs_child>->get_key( ) = iv_key.
+        ro_node = <fs_child>.
         RETURN.
       ENDIF.
     ENDLOOP.
   ENDMETHOD.
 
   METHOD clone.
-    DATA lo_child TYPE REF TO lcl_ast_node.
-    ro_node = NEW #(
-      iv_node_type = mv_type
-      iv_value     = mv_value
-      iv_key       = mv_key
-      iv_line      = mv_line
-      iv_column    = mv_column ).
+    FIELD-SYMBOLS <fs_child> TYPE REF TO lcl_ast_node.
+
+    CREATE OBJECT ro_node
+      EXPORTING iv_node_type = mv_type
+                iv_value     = mv_value
+                iv_key       = mv_key
+                iv_line      = mv_line
+                iv_column    = mv_column.
     ro_node->set_anchor( mv_anchor ).
-    LOOP AT mt_children INTO lo_child.
-      ro_node->add_child( lo_child->clone( ) ).
+
+    LOOP AT mt_children ASSIGNING <fs_child>.
+      ro_node->add_child( <fs_child>->clone( ) ).
     ENDLOOP.
   ENDMETHOD.
-
 ENDCLASS.
 
 
 CLASS lcl_scanner IMPLEMENTATION.
-
   METHOD constructor.
     DATA lv_cr TYPE c LENGTH 1.
+
     mv_source = iv_yaml.
     REPLACE ALL OCCURRENCES OF cl_abap_char_utilities=>cr_lf IN mv_source
-      WITH cl_abap_char_utilities=>newline.
+            WITH cl_abap_char_utilities=>newline.
+
     lv_cr = cl_abap_char_utilities=>cr_lf(1).
     REPLACE ALL OCCURRENCES OF lv_cr IN mv_source
-      WITH cl_abap_char_utilities=>newline.
+            WITH cl_abap_char_utilities=>newline.
     mv_len           = strlen( mv_source ).
     mv_pos           = 0.
     mv_line          = 1.
@@ -99,11 +101,12 @@ CLASS lcl_scanner IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD is_eof.
-    rv_yes = xsdbool( mv_pos >= mv_len ).
+    rv_yes = boolc( mv_pos >= mv_len ).
   ENDMETHOD.
 
   METHOD peek.
     DATA lv_target TYPE i.
+
     lv_target = mv_pos + iv_offset.
     IF lv_target < mv_len AND lv_target >= 0.
       rv_char = mv_source+lv_target(1).
@@ -114,19 +117,21 @@ CLASS lcl_scanner IMPLEMENTATION.
 
   METHOD advance.
     DATA lv_char TYPE string.
+
     DO iv_count TIMES.
       IF mv_pos >= mv_len.
         EXIT.
       ENDIF.
+
       lv_char = mv_source+mv_pos(1).
-      mv_pos += 1.
+      mv_pos = mv_pos + 1.
       IF lv_char = cl_abap_char_utilities=>newline.
-        mv_line += 1.
+        mv_line = mv_line + 1.
         mv_col = 1.
         mv_is_line_start = abap_true.
         mv_indent = 0.
       ELSE.
-        mv_col += 1.
+        mv_col = mv_col + 1.
       ENDIF.
     ENDDO.
   ENDMETHOD.
@@ -139,17 +144,18 @@ CLASS lcl_scanner IMPLEMENTATION.
 
   METHOD emit_token.
     DATA ls_token TYPE zif_ayaml_types=>ty_s_token.
-    ls_token-type       = iv_type.
-    ls_token-value      = iv_value.
+
+    ls_token-type  = iv_type.
+    ls_token-value = iv_value.
     IF iv_line IS NOT INITIAL.
-      ls_token-line     = iv_line.
+      ls_token-line = iv_line.
     ELSE.
-      ls_token-line     = mv_line.
+      ls_token-line = mv_line.
     ENDIF.
     IF iv_column IS NOT INITIAL.
-      ls_token-column   = iv_column.
+      ls_token-column = iv_column.
     ELSE.
-      ls_token-column   = mv_col.
+      ls_token-column = mv_col.
     ENDIF.
     ls_token-indent_num = mv_indent.
     INSERT ls_token INTO TABLE mt_tokens.
@@ -157,118 +163,129 @@ CLASS lcl_scanner IMPLEMENTATION.
 
   METHOD scan_line_start.
     DATA lv_char TYPE string.
+
     WHILE is_eof( ) = abap_false AND mv_is_line_start = abap_true.
       lv_char = peek( ).
-      IF lv_char = ` `.
-        mv_indent += 1.
-        advance( ).
-      ELSEIF lv_char = cl_abap_char_utilities=>horizontal_tab.
-        RAISE EXCEPTION NEW zcx_ayaml_error( iv_msg = |Tab character not allowed at line { mv_line }| ).
-      ELSEIF lv_char = cl_abap_char_utilities=>newline.
-        advance( ).
-        mv_indent = 0.
-        mv_is_line_start = abap_true.
-      ELSEIF lv_char = `#`.
-        WHILE is_eof( ) = abap_false AND peek( ) <> cl_abap_char_utilities=>newline.
+      CASE lv_char.
+        WHEN ` `.
+          mv_indent = mv_indent + 1.
           advance( ).
-        ENDWHILE.
-        IF is_eof( ) = abap_false.
+        WHEN cl_abap_char_utilities=>horizontal_tab.
+          RAISE EXCEPTION TYPE zcx_ayaml_error
+            EXPORTING iv_msg = |Tab character not allowed at line { mv_line }|.
+        WHEN cl_abap_char_utilities=>newline.
           advance( ).
-        ENDIF.
-        mv_indent = 0.
-        mv_is_line_start = abap_true.
-      ELSE.
-        mv_is_line_start = abap_false.
-        EXIT.
-      ENDIF.
+          mv_indent = 0.
+          mv_is_line_start = abap_true.
+        WHEN `#`.
+          WHILE is_eof( ) = abap_false AND peek( ) <> cl_abap_char_utilities=>newline.
+            advance( ).
+          ENDWHILE.
+          IF is_eof( ) = abap_false.
+            advance( ).
+          ENDIF.
+          mv_indent = 0.
+          mv_is_line_start = abap_true.
+        WHEN OTHERS.
+          mv_is_line_start = abap_false.
+          EXIT.
+      ENDCASE.
     ENDWHILE.
   ENDMETHOD.
 
   METHOD scan_single_quote.
     DATA lv_char TYPE string.
+
     advance( ).
     CLEAR rv_val.
     WHILE is_eof( ) = abap_false.
       lv_char = peek( ).
-      IF lv_char = `'`.
-        IF peek( 1 ) = `'`.
-          rv_val = |{ rv_val }'|.
-          advance( 2 ).
-        ELSE.
-          advance( 1 ).
-          RETURN.
-        ENDIF.
-      ELSEIF lv_char = cl_abap_char_utilities=>newline.
-        rv_val = |{ rv_val }\n|.
-        advance( ).
-      ELSE.
-        rv_val = |{ rv_val }{ lv_char }|.
-        advance( ).
-      ENDIF.
+      CASE lv_char.
+        WHEN `'`.
+          IF peek( 1 ) = `'`.
+            rv_val = |{ rv_val }'|.
+            advance( 2 ).
+          ELSE.
+            advance( 1 ).
+            RETURN.
+          ENDIF.
+        WHEN cl_abap_char_utilities=>newline.
+          rv_val = |{ rv_val }\n|.
+          advance( ).
+        WHEN OTHERS.
+          rv_val = |{ rv_val }{ lv_char }|.
+          advance( ).
+      ENDCASE.
     ENDWHILE.
-    RAISE EXCEPTION NEW zcx_ayaml_error( iv_msg = |Unterminated single-quoted string at line { mv_line }| ).
+
+    RAISE EXCEPTION TYPE zcx_ayaml_error
+      EXPORTING iv_msg = |Unterminated single-quoted string at line { mv_line }|.
   ENDMETHOD.
 
   METHOD scan_double_quote.
     DATA lv_char TYPE string.
     DATA lv_next TYPE string.
+
     advance( ).
     CLEAR rv_val.
     WHILE is_eof( ) = abap_false.
       lv_char = peek( ).
-      IF lv_char = `"`.
-        advance( 1 ).
-        RETURN.
-      ELSEIF lv_char = `\`.
-        advance( 1 ).
-        lv_next = peek( ).
-        advance( 1 ).
-        CASE lv_next.
-          WHEN `"`.
-            rv_val = |{ rv_val }"|.
-          WHEN `\`.
-            rv_val = |{ rv_val }\\|.
-          WHEN `n`.
-            rv_val = |{ rv_val }{ cl_abap_char_utilities=>newline }|.
-          WHEN `t`.
-            rv_val = |{ rv_val }{ cl_abap_char_utilities=>horizontal_tab }|.
-          WHEN `r`.
-            rv_val = |{ rv_val }{ cl_abap_char_utilities=>cr_lf(1) }|.
-          WHEN `0`.
-            rv_val = |{ rv_val } |.
-          WHEN OTHERS.
-            rv_val = |{ rv_val }{ lv_next }|.
-        ENDCASE.
-      ELSEIF lv_char = cl_abap_char_utilities=>newline.
-        rv_val = |{ rv_val }{ cl_abap_char_utilities=>newline }|.
-        advance( ).
-      ELSE.
-        rv_val = |{ rv_val }{ lv_char }|.
-        advance( ).
-      ENDIF.
+      CASE lv_char.
+        WHEN `"`.
+          advance( 1 ).
+          RETURN.
+        WHEN `\`.
+          advance( 1 ).
+          lv_next = peek( ).
+          advance( 1 ).
+          CASE lv_next.
+            WHEN `"`.
+              rv_val = |{ rv_val }"|.
+            WHEN `\`.
+              rv_val = |{ rv_val }\\|.
+            WHEN `n`.
+              rv_val = |{ rv_val }{ cl_abap_char_utilities=>newline }|.
+            WHEN `t`.
+              rv_val = |{ rv_val }{ cl_abap_char_utilities=>horizontal_tab }|.
+            WHEN `r`.
+              rv_val = |{ rv_val }{ cl_abap_char_utilities=>cr_lf(1) }|.
+            WHEN `0`.
+              rv_val = |{ rv_val } |.
+            WHEN OTHERS.
+              rv_val = |{ rv_val }{ lv_next }|.
+          ENDCASE.
+        WHEN cl_abap_char_utilities=>newline.
+          rv_val = |{ rv_val }{ cl_abap_char_utilities=>newline }|.
+          advance( ).
+        WHEN OTHERS.
+          rv_val = |{ rv_val }{ lv_char }|.
+          advance( ).
+      ENDCASE.
     ENDWHILE.
-    RAISE EXCEPTION NEW zcx_ayaml_error( iv_msg = |Unterminated double-quoted string at line { mv_line }| ).
+
+    RAISE EXCEPTION TYPE zcx_ayaml_error
+      EXPORTING iv_msg = |Unterminated double-quoted string at line { mv_line }|.
   ENDMETHOD.
 
   METHOD collect_block_lines.
-    DATA lv_line_indent   TYPE i.
     DATA lv_line_buf      TYPE string.
     DATA lv_scalar_indent TYPE i.
+    DATA lv_line_indent   TYPE i.
     DATA lv_extra         TYPE i.
 
     lv_scalar_indent = -1.
-    CLEAR ct_lines.
+    CLEAR rt_lines.
 
     WHILE is_eof( ) = abap_false.
       lv_line_indent = 0.
       WHILE is_eof( ) = abap_false AND peek( ) = ` `.
-        lv_line_indent += 1.
+        lv_line_indent = lv_line_indent + 1.
         advance( ).
       ENDWHILE.
 
       IF peek( ) = cl_abap_char_utilities=>newline.
         advance( ).
-        INSERT `` INTO TABLE ct_lines.
+        INSERT `` INTO TABLE rt_lines.
         CONTINUE.
       ENDIF.
 
@@ -282,8 +299,8 @@ CLASS lcl_scanner IMPLEMENTATION.
         ENDIF.
         lv_scalar_indent = lv_line_indent.
       ELSEIF lv_line_indent < lv_scalar_indent.
-        mv_pos -= lv_line_indent.
-        mv_col -= lv_line_indent.
+        mv_pos = mv_pos - lv_line_indent.
+        mv_col = mv_col - lv_line_indent.
         mv_indent = lv_line_indent.
         mv_is_line_start = abap_false.
         EXIT.
@@ -302,43 +319,41 @@ CLASS lcl_scanner IMPLEMENTATION.
       IF is_eof( ) = abap_false.
         advance( ).
       ENDIF.
-      INSERT lv_line_buf INTO TABLE ct_lines.
+      INSERT lv_line_buf INTO TABLE rt_lines.
     ENDWHILE.
-
-    rv_count = lines( ct_lines ).
   ENDMETHOD.
 
   METHOD format_block_lines.
-    DATA lv_idx       TYPE i.
-    DATA lv_line      TYPE string.
-    DATA lv_prev_idx  TYPE i.
-    DATA lv_prev_line TYPE string.
-    DATA lv_count     TYPE i.
+    DATA lv_count    TYPE i.
+    DATA lv_idx      TYPE i.
+    DATA lv_prev_idx TYPE i.
+    FIELD-SYMBOLS <fs_line>      TYPE string.
+    FIELD-SYMBOLS <fs_prev_line> TYPE string.
 
     lv_count = lines( it_lines ).
     IF iv_indicator = `|`.
-      LOOP AT it_lines INTO lv_line.
-        lv_idx += 1.
+      LOOP AT it_lines ASSIGNING <fs_line>.
+        lv_idx = lv_idx + 1.
         IF lv_idx = 1.
-          rv_val = lv_line.
+          rv_val = <fs_line>.
         ELSE.
-          rv_val = |{ rv_val }{ cl_abap_char_utilities=>newline }{ lv_line }|.
+          rv_val = |{ rv_val }{ cl_abap_char_utilities=>newline }{ <fs_line> }|.
         ENDIF.
       ENDLOOP.
     ELSE.
-      LOOP AT it_lines INTO lv_line.
-        lv_idx += 1.
+      LOOP AT it_lines ASSIGNING <fs_line>.
+        lv_idx = lv_idx + 1.
         IF lv_idx = 1.
-          rv_val = lv_line.
-        ELSEIF lv_line IS INITIAL.
+          rv_val = <fs_line>.
+        ELSEIF <fs_line> IS INITIAL.
           rv_val = |{ rv_val }{ cl_abap_char_utilities=>newline }|.
         ELSE.
           lv_prev_idx = lv_idx - 1.
-          READ TABLE it_lines INDEX lv_prev_idx INTO lv_prev_line.
-          IF lv_prev_line IS INITIAL.
-            rv_val = |{ rv_val }{ lv_line }|.
+          READ TABLE it_lines INDEX lv_prev_idx ASSIGNING <fs_prev_line>.
+          IF sy-subrc = 0 AND <fs_prev_line> IS INITIAL.
+            rv_val = |{ rv_val }{ <fs_line> }|.
           ELSE.
-            rv_val = |{ rv_val } { lv_line }|.
+            rv_val = |{ rv_val } { <fs_line> }|.
           ENDIF.
         ENDIF.
       ENDLOOP.
@@ -350,9 +365,9 @@ CLASS lcl_scanner IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD scan_block_scalar.
-    DATA lv_chomping TYPE c LENGTH 1.
-    DATA lv_char     TYPE string.
     DATA lt_lines    TYPE string_table.
+    DATA lv_char     TYPE string.
+    DATA lv_chomping TYPE string.
 
     advance( ).
     lv_char = peek( ).
@@ -368,9 +383,7 @@ CLASS lcl_scanner IMPLEMENTATION.
       advance( ).
     ENDIF.
 
-    collect_block_lines( EXPORTING iv_base_indent = mv_indent
-                         CHANGING  ct_lines       = lt_lines ).
-
+    lt_lines = collect_block_lines( mv_indent ).
     rv_val = format_block_lines( it_lines     = lt_lines
                                  iv_indicator = iv_indicator
                                  iv_chomping  = lv_chomping ).
@@ -414,80 +427,108 @@ CLASS lcl_scanner IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD scan_document_boundary.
-    IF iv_start_col = 1 AND mv_indent = 0.
-      IF iv_char = `-` AND peek( 1 ) = `-` AND peek( 2 ) = `-`.
-        advance( 3 ).
-        emit_token( iv_type = zif_ayaml_types=>cs_token_type-doc_start iv_value = `---` ).
-        rv_hit = abap_true.
-      ELSEIF iv_char = `.` AND peek( 1 ) = `.` AND peek( 2 ) = `.`.
-        advance( 3 ).
-        emit_token( iv_type = zif_ayaml_types=>cs_token_type-doc_end iv_value = `...` ).
-        rv_hit = abap_true.
-      ENDIF.
+    IF NOT ( iv_start_col = 1 AND mv_indent = 0 ).
+      RETURN.
+    ENDIF.
+
+    IF iv_char = `-` AND peek( 1 ) = `-` AND peek( 2 ) = `-`.
+      advance( 3 ).
+      emit_token( iv_type  = zif_ayaml_types=>cs_token_type-doc_start
+                  iv_value = `---` ).
+      rv_hit = abap_true.
+    ELSEIF iv_char = `.` AND peek( 1 ) = `.` AND peek( 2 ) = `.`.
+      advance( 3 ).
+      emit_token( iv_type  = zif_ayaml_types=>cs_token_type-doc_end
+                  iv_value = `...` ).
+      rv_hit = abap_true.
     ENDIF.
   ENDMETHOD.
 
   METHOD scan_flow_token.
     CASE iv_char.
       WHEN `{`.
-        mv_flow_depth += 1.
+        mv_flow_depth = mv_flow_depth + 1.
         advance( 1 ).
-        emit_token( iv_type = zif_ayaml_types=>cs_token_type-flow_map_start iv_value = `{` iv_line = iv_start_line iv_column = iv_start_col ).
+        emit_token( iv_type   = zif_ayaml_types=>cs_token_type-flow_map_start
+                    iv_value  = `{`
+                    iv_line   = iv_start_line
+                    iv_column = iv_start_col ).
         rv_hit = abap_true.
       WHEN `}`.
         IF mv_flow_depth > 0.
-          mv_flow_depth -= 1.
+          mv_flow_depth = mv_flow_depth - 1.
         ENDIF.
         advance( 1 ).
-        emit_token( iv_type = zif_ayaml_types=>cs_token_type-flow_map_end iv_value = `}` iv_line = iv_start_line iv_column = iv_start_col ).
+        emit_token( iv_type   = zif_ayaml_types=>cs_token_type-flow_map_end
+                    iv_value  = `}`
+                    iv_line   = iv_start_line
+                    iv_column = iv_start_col ).
         rv_hit = abap_true.
       WHEN `[`.
-        mv_flow_depth += 1.
+        mv_flow_depth = mv_flow_depth + 1.
         advance( 1 ).
-        emit_token( iv_type = zif_ayaml_types=>cs_token_type-flow_seq_start iv_value = `[` iv_line = iv_start_line iv_column = iv_start_col ).
+        emit_token( iv_type   = zif_ayaml_types=>cs_token_type-flow_seq_start
+                    iv_value  = `[`
+                    iv_line   = iv_start_line
+                    iv_column = iv_start_col ).
         rv_hit = abap_true.
       WHEN `]`.
         IF mv_flow_depth > 0.
-          mv_flow_depth -= 1.
+          mv_flow_depth = mv_flow_depth - 1.
         ENDIF.
         advance( 1 ).
-        emit_token( iv_type = zif_ayaml_types=>cs_token_type-flow_seq_end iv_value = `]` iv_line = iv_start_line iv_column = iv_start_col ).
+        emit_token( iv_type   = zif_ayaml_types=>cs_token_type-flow_seq_end
+                    iv_value  = `]`
+                    iv_line   = iv_start_line
+                    iv_column = iv_start_col ).
         rv_hit = abap_true.
       WHEN `,`.
         advance( 1 ).
-        emit_token( iv_type = zif_ayaml_types=>cs_token_type-flow_entry iv_value = `,` iv_line = iv_start_line iv_column = iv_start_col ).
+        emit_token( iv_type   = zif_ayaml_types=>cs_token_type-flow_entry
+                    iv_value  = `,`
+                    iv_line   = iv_start_line
+                    iv_column = iv_start_col ).
         rv_hit = abap_true.
     ENDCASE.
   ENDMETHOD.
 
   METHOD scan_anchor_or_alias.
     DATA lv_name TYPE string.
-    IF iv_char = `&`.
-      advance( 1 ).
-      CLEAR lv_name.
-      WHILE is_eof( ) = abap_false AND peek( ) <> ` ` AND peek( ) <> cl_abap_char_utilities=>newline.
-        lv_name = |{ lv_name }{ peek( ) }|.
+
+    CASE iv_char.
+      WHEN `&`.
         advance( 1 ).
-      ENDWHILE.
-      emit_token( iv_type = zif_ayaml_types=>cs_token_type-anchor iv_value = lv_name iv_line = iv_start_line iv_column = iv_start_col ).
-      rv_hit = abap_true.
-    ELSEIF iv_char = `*`.
-      advance( 1 ).
-      CLEAR lv_name.
-      WHILE is_eof( ) = abap_false AND peek( ) <> ` ` AND peek( ) <> cl_abap_char_utilities=>newline.
-        lv_name = |{ lv_name }{ peek( ) }|.
+        CLEAR lv_name.
+        WHILE is_eof( ) = abap_false AND peek( ) <> ` ` AND peek( ) <> cl_abap_char_utilities=>newline.
+          lv_name = |{ lv_name }{ peek( ) }|.
+          advance( 1 ).
+        ENDWHILE.
+        emit_token( iv_type   = zif_ayaml_types=>cs_token_type-anchor
+                    iv_value  = lv_name
+                    iv_line   = iv_start_line
+                    iv_column = iv_start_col ).
+        rv_hit = abap_true.
+      WHEN `*`.
         advance( 1 ).
-      ENDWHILE.
-      emit_token( iv_type = zif_ayaml_types=>cs_token_type-alias iv_value = lv_name iv_line = iv_start_line iv_column = iv_start_col ).
-      rv_hit = abap_true.
-    ENDIF.
+        CLEAR lv_name.
+        WHILE is_eof( ) = abap_false AND peek( ) <> ` ` AND peek( ) <> cl_abap_char_utilities=>newline.
+          lv_name = |{ lv_name }{ peek( ) }|.
+          advance( 1 ).
+        ENDWHILE.
+        emit_token( iv_type   = zif_ayaml_types=>cs_token_type-alias
+                    iv_value  = lv_name
+                    iv_line   = iv_start_line
+                    iv_column = iv_start_col ).
+        rv_hit = abap_true.
+    ENDCASE.
   ENDMETHOD.
 
   METHOD scan.
-    DATA lv_char        TYPE string.
-    DATA lv_start_line  TYPE i.
-    DATA lv_start_col   TYPE i.
-    DATA lv_scalar_val  TYPE string.
+    DATA lv_char       TYPE string.
+    DATA lv_start_line TYPE i.
+    DATA lv_start_col  TYPE i.
+    DATA lv_scalar_val TYPE string.
+    DATA lv_peek1      TYPE string.
 
     CLEAR mt_tokens.
 
@@ -504,11 +545,12 @@ CLASS lcl_scanner IMPLEMENTATION.
         EXIT.
       ENDIF.
 
-      lv_char       = peek( ).
+      lv_char = peek( ).
       lv_start_line = mv_line.
-      lv_start_col  = mv_col.
+      lv_start_col = mv_col.
 
-      IF scan_document_boundary( iv_start_col = lv_start_col iv_char = lv_char ) = abap_true.
+      IF scan_document_boundary( iv_start_col = lv_start_col
+                                 iv_char      = lv_char ) = abap_true.
         CONTINUE.
       ENDIF.
 
@@ -526,51 +568,85 @@ CLASS lcl_scanner IMPLEMENTATION.
 
       IF lv_char = `-` AND ( peek( 1 ) = ` ` OR peek( 1 ) = cl_abap_char_utilities=>newline OR peek( 1 ) IS INITIAL ).
         advance( 1 ).
-        emit_token( iv_type = zif_ayaml_types=>cs_token_type-seq_entry iv_value = `-` iv_line = lv_start_line iv_column = lv_start_col ).
+        emit_token( iv_type   = zif_ayaml_types=>cs_token_type-seq_entry
+                    iv_value  = `-`
+                    iv_line   = lv_start_line
+                    iv_column = lv_start_col ).
         CONTINUE.
       ENDIF.
 
-      IF scan_flow_token( iv_char = lv_char iv_start_line = lv_start_line iv_start_col = lv_start_col ) = abap_true.
+      IF scan_flow_token( iv_char       = lv_char
+                          iv_start_line = lv_start_line
+                          iv_start_col  = lv_start_col ) = abap_true.
         CONTINUE.
       ENDIF.
 
-      IF scan_anchor_or_alias( iv_char = lv_char iv_start_line = lv_start_line iv_start_col = lv_start_col ) = abap_true.
+      IF scan_anchor_or_alias( iv_char       = lv_char
+                               iv_start_line = lv_start_line
+                               iv_start_col  = lv_start_col ) = abap_true.
         CONTINUE.
       ENDIF.
 
       IF ( lv_char = `|` OR lv_char = `>` ) AND mv_flow_depth = 0.
         lv_scalar_val = scan_block_scalar( lv_char ).
-        emit_token( iv_type = zif_ayaml_types=>cs_token_type-scalar iv_value = lv_scalar_val iv_line = lv_start_line iv_column = lv_start_col ).
+        emit_token( iv_type   = zif_ayaml_types=>cs_token_type-scalar
+                    iv_value  = lv_scalar_val
+                    iv_line   = lv_start_line
+                    iv_column = lv_start_col ).
         CONTINUE.
       ENDIF.
 
-      IF lv_char = `'`.
-        lv_scalar_val = scan_single_quote( ).
-        skip_spaces( ).
-        IF peek( ) = `:` AND ( peek( 1 ) = ` ` OR peek( 1 ) = cl_abap_char_utilities=>newline OR peek( 1 ) IS INITIAL ).
-          advance( 1 ).
-          emit_token( iv_type = zif_ayaml_types=>cs_token_type-map_key iv_value = lv_scalar_val iv_line = lv_start_line iv_column = lv_start_col ).
-          emit_token( iv_type = zif_ayaml_types=>cs_token_type-map_val iv_value = `:` iv_line = mv_line iv_column = mv_col ).
-        ELSE.
-          emit_token( iv_type = zif_ayaml_types=>cs_token_type-scalar iv_value = lv_scalar_val iv_line = lv_start_line iv_column = lv_start_col ).
-        ENDIF.
-        CONTINUE.
-      ELSEIF lv_char = `"`.
-        lv_scalar_val = scan_double_quote( ).
-        skip_spaces( ).
-        IF peek( ) = `:` AND ( peek( 1 ) = ` ` OR peek( 1 ) = cl_abap_char_utilities=>newline OR peek( 1 ) IS INITIAL ).
-          advance( 1 ).
-          emit_token( iv_type = zif_ayaml_types=>cs_token_type-map_key iv_value = lv_scalar_val iv_line = lv_start_line iv_column = lv_start_col ).
-          emit_token( iv_type = zif_ayaml_types=>cs_token_type-map_val iv_value = `:` iv_line = mv_line iv_column = mv_col ).
-        ELSE.
-          emit_token( iv_type = zif_ayaml_types=>cs_token_type-scalar iv_value = lv_scalar_val iv_line = lv_start_line iv_column = lv_start_col ).
-        ENDIF.
-        CONTINUE.
-      ENDIF.
+      CASE lv_char.
+        WHEN `'`.
+          lv_scalar_val = scan_single_quote( ).
+          skip_spaces( ).
+          lv_peek1 = peek( 1 ).
+          IF peek( ) = `:` AND ( lv_peek1 = ` ` OR lv_peek1 = cl_abap_char_utilities=>newline OR lv_peek1 IS INITIAL ).
+            advance( 1 ).
+            emit_token( iv_type   = zif_ayaml_types=>cs_token_type-map_key
+                        iv_value  = lv_scalar_val
+                        iv_line   = lv_start_line
+                        iv_column = lv_start_col ).
+            emit_token( iv_type   = zif_ayaml_types=>cs_token_type-map_val
+                        iv_value  = `:`
+                        iv_line   = mv_line
+                        iv_column = mv_col ).
+          ELSE.
+            emit_token( iv_type   = zif_ayaml_types=>cs_token_type-scalar
+                        iv_value  = lv_scalar_val
+                        iv_line   = lv_start_line
+                        iv_column = lv_start_col ).
+          ENDIF.
+          CONTINUE.
+        WHEN `"`.
+          lv_scalar_val = scan_double_quote( ).
+          skip_spaces( ).
+          lv_peek1 = peek( 1 ).
+          IF peek( ) = `:` AND ( lv_peek1 = ` ` OR lv_peek1 = cl_abap_char_utilities=>newline OR lv_peek1 IS INITIAL ).
+            advance( 1 ).
+            emit_token( iv_type   = zif_ayaml_types=>cs_token_type-map_key
+                        iv_value  = lv_scalar_val
+                        iv_line   = lv_start_line
+                        iv_column = lv_start_col ).
+            emit_token( iv_type   = zif_ayaml_types=>cs_token_type-map_val
+                        iv_value  = `:`
+                        iv_line   = mv_line
+                        iv_column = mv_col ).
+          ELSE.
+            emit_token( iv_type   = zif_ayaml_types=>cs_token_type-scalar
+                        iv_value  = lv_scalar_val
+                        iv_line   = lv_start_line
+                        iv_column = lv_start_col ).
+          ENDIF.
+          CONTINUE.
+      ENDCASE.
 
       IF lv_char = `:` AND ( peek( 1 ) = ` ` OR peek( 1 ) = cl_abap_char_utilities=>newline OR peek( 1 ) IS INITIAL ).
         advance( 1 ).
-        emit_token( iv_type = zif_ayaml_types=>cs_token_type-map_val iv_value = `:` iv_line = lv_start_line iv_column = lv_start_col ).
+        emit_token( iv_type   = zif_ayaml_types=>cs_token_type-map_val
+                    iv_value  = `:`
+                    iv_line   = lv_start_line
+                    iv_column = lv_start_col ).
         CONTINUE.
       ENDIF.
 
@@ -578,22 +654,30 @@ CLASS lcl_scanner IMPLEMENTATION.
       skip_spaces( ).
       IF peek( ) = `:` AND ( peek( 1 ) = ` ` OR peek( 1 ) = cl_abap_char_utilities=>newline OR peek( 1 ) IS INITIAL ).
         advance( 1 ).
-        emit_token( iv_type = zif_ayaml_types=>cs_token_type-map_key iv_value = lv_scalar_val iv_line = lv_start_line iv_column = lv_start_col ).
-        emit_token( iv_type = zif_ayaml_types=>cs_token_type-map_val iv_value = `:` iv_line = mv_line iv_column = mv_col ).
+        emit_token( iv_type   = zif_ayaml_types=>cs_token_type-map_key
+                    iv_value  = lv_scalar_val
+                    iv_line   = lv_start_line
+                    iv_column = lv_start_col ).
+        emit_token( iv_type   = zif_ayaml_types=>cs_token_type-map_val
+                    iv_value  = `:`
+                    iv_line   = mv_line
+                    iv_column = mv_col ).
       ELSE.
-        emit_token( iv_type = zif_ayaml_types=>cs_token_type-scalar iv_value = lv_scalar_val iv_line = lv_start_line iv_column = lv_start_col ).
+        emit_token( iv_type   = zif_ayaml_types=>cs_token_type-scalar
+                    iv_value  = lv_scalar_val
+                    iv_line   = lv_start_line
+                    iv_column = lv_start_col ).
       ENDIF.
     ENDWHILE.
 
-    emit_token( iv_type = zif_ayaml_types=>cs_token_type-eof iv_value = `` ).
+    emit_token( iv_type  = zif_ayaml_types=>cs_token_type-eof
+                iv_value = `` ).
     rt_tokens = mt_tokens.
   ENDMETHOD.
-
 ENDCLASS.
 
 
 CLASS lcl_ast_parser IMPLEMENTATION.
-
   METHOD constructor.
     mt_tokens = it_tokens.
     mv_pos    = 1.
@@ -601,12 +685,13 @@ CLASS lcl_ast_parser IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD is_eof.
-    DATA ls_tk TYPE zif_ayaml_types=>ty_s_token.
+    FIELD-SYMBOLS <fs_tk> TYPE zif_ayaml_types=>ty_s_token.
+
     IF mv_pos > mv_count.
       rv_yes = abap_true.
     ELSE.
-      READ TABLE mt_tokens INDEX mv_pos INTO ls_tk.
-      IF sy-subrc = 0 AND ls_tk-type = zif_ayaml_types=>cs_token_type-eof.
+      READ TABLE mt_tokens INDEX mv_pos ASSIGNING <fs_tk>.
+      IF sy-subrc = 0 AND <fs_tk>-type = zif_ayaml_types=>cs_token_type-eof.
         rv_yes = abap_true.
       ELSE.
         rv_yes = abap_false.
@@ -615,9 +700,13 @@ CLASS lcl_ast_parser IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD current.
+    FIELD-SYMBOLS <fs_tk> TYPE zif_ayaml_types=>ty_s_token.
+
     IF mv_pos <= mv_count.
-      READ TABLE mt_tokens INDEX mv_pos INTO rs_token.
-      IF sy-subrc <> 0.
+      READ TABLE mt_tokens INDEX mv_pos ASSIGNING <fs_tk>.
+      IF sy-subrc = 0.
+        rs_token = <fs_tk>.
+      ELSE.
         CLEAR rs_token.
       ENDIF.
     ELSE.
@@ -626,44 +715,46 @@ CLASS lcl_ast_parser IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD advance.
-    mv_pos += 1.
+    mv_pos = mv_pos + 1.
   ENDMETHOD.
 
   METHOD register_anchor.
     DATA ls_anchor TYPE ty_s_anchor.
+
     ls_anchor-name = iv_name.
     ls_anchor-node = io_node.
     INSERT ls_anchor INTO TABLE mt_anchors.
   ENDMETHOD.
 
   METHOD resolve_alias.
-    DATA ls_anchor TYPE ty_s_anchor.
-    READ TABLE mt_anchors WITH TABLE KEY name = iv_name INTO ls_anchor.
+    FIELD-SYMBOLS <fs_anchor> TYPE ty_s_anchor.
+
+    READ TABLE mt_anchors WITH TABLE KEY name = iv_name ASSIGNING <fs_anchor>.
     IF sy-subrc = 0.
-      ro_node = ls_anchor-node->clone( ).
+      ro_node = <fs_anchor>-node->clone( ).
     ELSE.
-      RAISE EXCEPTION NEW zcx_ayaml_error( iv_msg = |Undefined alias: *{ iv_name }| ).
+      RAISE EXCEPTION TYPE zcx_ayaml_error
+        EXPORTING iv_msg = |Undefined alias: *{ iv_name }|.
     ENDIF.
   ENDMETHOD.
 
   METHOD parse_scalar.
-    DATA ls_tk   TYPE zif_ayaml_types=>ty_s_token.
     DATA lv_type TYPE zif_ayaml_types=>ty_node_type.
     DATA lv_val  TYPE string.
+    DATA ls_tk   TYPE zif_ayaml_types=>ty_s_token.
 
     ls_tk = current( ).
     advance( ).
 
-    zcl_ayaml_utils=>detect_yaml_scalar(
-      EXPORTING iv_raw   = ls_tk-value
-      IMPORTING ev_type  = lv_type
-                ev_value = lv_val ).
+    zcl_ayaml_utils=>detect_yaml_scalar( EXPORTING iv_raw   = ls_tk-value
+                                         IMPORTING ev_type  = lv_type
+                                                   ev_value = lv_val ).
 
-    ro_node = NEW #(
-      iv_node_type = lv_type
-      iv_value     = lv_val
-      iv_line      = ls_tk-line
-      iv_column    = ls_tk-column ).
+    CREATE OBJECT ro_node
+      EXPORTING iv_node_type = lv_type
+                iv_value     = lv_val
+                iv_line      = ls_tk-line
+                iv_column    = ls_tk-column.
   ENDMETHOD.
 
   METHOD parse_flow_mapping.
@@ -674,10 +765,10 @@ CLASS lcl_ast_parser IMPLEMENTATION.
     ls_tk = current( ).
     advance( ).
 
-    ro_node = NEW #(
-      iv_node_type = zif_ayaml_types=>cs_type-mapping
-      iv_line      = ls_tk-line
-      iv_column    = ls_tk-column ).
+    CREATE OBJECT ro_node
+      EXPORTING iv_node_type = zif_ayaml_types=>cs_type-mapping
+                iv_line      = ls_tk-line
+                iv_column    = ls_tk-column.
 
     WHILE is_eof( ) = abap_false AND current( )-type <> zif_ayaml_types=>cs_token_type-flow_map_end.
       IF current( )-type = zif_ayaml_types=>cs_token_type-flow_entry.
@@ -686,16 +777,16 @@ CLASS lcl_ast_parser IMPLEMENTATION.
       ENDIF.
 
       IF current( )-type <> zif_ayaml_types=>cs_token_type-map_key.
-        RAISE EXCEPTION NEW zcx_ayaml_error(
-          iv_msg = |Expected map key in flow mapping at line { current( )-line }| ).
+        RAISE EXCEPTION TYPE zcx_ayaml_error
+          EXPORTING iv_msg = |Expected map key in flow mapping at line { current( )-line }|.
       ENDIF.
 
       lv_key = current( )-value.
       advance( ).
 
       IF current( )-type <> zif_ayaml_types=>cs_token_type-map_val.
-        RAISE EXCEPTION NEW zcx_ayaml_error(
-          iv_msg = |Expected ':' in flow mapping at line { current( )-line }| ).
+        RAISE EXCEPTION TYPE zcx_ayaml_error
+          EXPORTING iv_msg = |Expected ':' in flow mapping at line { current( )-line }|.
       ENDIF.
       advance( ).
 
@@ -711,7 +802,8 @@ CLASS lcl_ast_parser IMPLEMENTATION.
     IF current( )-type = zif_ayaml_types=>cs_token_type-flow_map_end.
       advance( ).
     ELSE.
-      RAISE EXCEPTION NEW zcx_ayaml_error( iv_msg = `Unterminated flow mapping, missing '}'` ).
+      RAISE EXCEPTION TYPE zcx_ayaml_error
+        EXPORTING iv_msg = `Unterminated flow mapping, missing '}'`.
     ENDIF.
   ENDMETHOD.
 
@@ -722,10 +814,10 @@ CLASS lcl_ast_parser IMPLEMENTATION.
     ls_tk = current( ).
     advance( ).
 
-    ro_node = NEW #(
-      iv_node_type = zif_ayaml_types=>cs_type-sequence
-      iv_line      = ls_tk-line
-      iv_column    = ls_tk-column ).
+    CREATE OBJECT ro_node
+      EXPORTING iv_node_type = zif_ayaml_types=>cs_type-sequence
+                iv_line      = ls_tk-line
+                iv_column    = ls_tk-column.
 
     WHILE is_eof( ) = abap_false AND current( )-type <> zif_ayaml_types=>cs_token_type-flow_seq_end.
       IF current( )-type = zif_ayaml_types=>cs_token_type-flow_entry.
@@ -744,28 +836,29 @@ CLASS lcl_ast_parser IMPLEMENTATION.
     IF current( )-type = zif_ayaml_types=>cs_token_type-flow_seq_end.
       advance( ).
     ELSE.
-      RAISE EXCEPTION NEW zcx_ayaml_error( iv_msg = `Unterminated flow sequence, missing ']'` ).
+      RAISE EXCEPTION TYPE zcx_ayaml_error
+        EXPORTING iv_msg = `Unterminated flow sequence, missing ']'`.
     ENDIF.
   ENDMETHOD.
 
   METHOD parse_block_sequence.
-    DATA ls_tk       TYPE zif_ayaml_types=>ty_s_token.
     DATA lv_anchor   TYPE string.
-    DATA lo_elem     TYPE REF TO lcl_ast_node.
+    DATA ls_tk       TYPE zif_ayaml_types=>ty_s_token.
     DATA lv_entry_in TYPE i.
     DATA ls_next     TYPE zif_ayaml_types=>ty_s_token.
+    DATA lo_elem     TYPE REF TO lcl_ast_node.
 
     ls_tk = current( ).
-    ro_node = NEW #(
-      iv_node_type = zif_ayaml_types=>cs_type-sequence
-      iv_line      = ls_tk-line
-      iv_column    = ls_tk-column ).
+    CREATE OBJECT ro_node
+      EXPORTING iv_node_type = zif_ayaml_types=>cs_type-sequence
+                iv_line      = ls_tk-line
+                iv_column    = ls_tk-column.
 
     WHILE is_eof( ) = abap_false.
       ls_tk = current( ).
-      IF ls_tk-type = zif_ayaml_types=>cs_token_type-eof
-          OR ls_tk-type = zif_ayaml_types=>cs_token_type-doc_end
-          OR ls_tk-type = zif_ayaml_types=>cs_token_type-doc_start.
+      IF    ls_tk-type = zif_ayaml_types=>cs_token_type-eof
+         OR ls_tk-type = zif_ayaml_types=>cs_token_type-doc_end
+         OR ls_tk-type = zif_ayaml_types=>cs_token_type-doc_start.
         EXIT.
       ENDIF.
 
@@ -797,12 +890,15 @@ CLASS lcl_ast_parser IMPLEMENTATION.
       ELSEIF ls_next-indent_num > lv_entry_in.
         lo_elem = parse_node( ls_next-indent_num ).
       ELSE.
-        lo_elem = NEW #( iv_node_type = zif_ayaml_types=>cs_type-null iv_value = `` ).
+        CREATE OBJECT lo_elem
+          EXPORTING iv_node_type = zif_ayaml_types=>cs_type-null
+                    iv_value     = ``.
       ENDIF.
 
       IF lv_anchor IS NOT INITIAL.
         lo_elem->set_anchor( lv_anchor ).
-        register_anchor( iv_name = lv_anchor io_node = lo_elem ).
+        register_anchor( iv_name = lv_anchor
+                         io_node = lo_elem ).
       ENDIF.
 
       ro_node->add_child( lo_elem ).
@@ -810,26 +906,26 @@ CLASS lcl_ast_parser IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD parse_block_mapping.
+    DATA lv_anchor         TYPE string.
     DATA ls_tk             TYPE zif_ayaml_types=>ty_s_token.
     DATA lv_key            TYPE string.
-    DATA lv_anchor         TYPE string.
-    DATA lo_val            TYPE REF TO lcl_ast_node.
     DATA ls_next           TYPE zif_ayaml_types=>ty_s_token.
+    DATA lo_val            TYPE REF TO lcl_ast_node.
     DATA lt_merge_children TYPE lcl_ast_node=>ty_t_nodes.
-    DATA lo_m_child        TYPE REF TO lcl_ast_node.
     DATA lo_existing       TYPE REF TO lcl_ast_node.
+    FIELD-SYMBOLS <fs_m_child> TYPE REF TO lcl_ast_node.
 
     ls_tk = current( ).
-    ro_node = NEW #(
-      iv_node_type = zif_ayaml_types=>cs_type-mapping
-      iv_line      = ls_tk-line
-      iv_column    = ls_tk-column ).
+    CREATE OBJECT ro_node
+      EXPORTING iv_node_type = zif_ayaml_types=>cs_type-mapping
+                iv_line      = ls_tk-line
+                iv_column    = ls_tk-column.
 
     WHILE is_eof( ) = abap_false.
       ls_tk = current( ).
-      IF ls_tk-type = zif_ayaml_types=>cs_token_type-eof
-          OR ls_tk-type = zif_ayaml_types=>cs_token_type-doc_end
-          OR ls_tk-type = zif_ayaml_types=>cs_token_type-doc_start.
+      IF    ls_tk-type = zif_ayaml_types=>cs_token_type-eof
+         OR ls_tk-type = zif_ayaml_types=>cs_token_type-doc_end
+         OR ls_tk-type = zif_ayaml_types=>cs_token_type-doc_start.
         EXIT.
       ENDIF.
 
@@ -845,8 +941,8 @@ CLASS lcl_ast_parser IMPLEMENTATION.
       advance( ).
 
       IF current( )-type <> zif_ayaml_types=>cs_token_type-map_val.
-        RAISE EXCEPTION NEW zcx_ayaml_error(
-          iv_msg = |Expected ':' after '{ lv_key }' at line { ls_tk-line }| ).
+        RAISE EXCEPTION TYPE zcx_ayaml_error
+          EXPORTING iv_msg = |Expected ':' after '{ lv_key }' at line { ls_tk-line }|.
       ENDIF.
       advance( ).
 
@@ -863,22 +959,25 @@ CLASS lcl_ast_parser IMPLEMENTATION.
       ELSEIF ls_next-indent_num > ls_tk-indent_num.
         lo_val = parse_node( ls_next-indent_num ).
       ELSE.
-        lo_val = NEW #( iv_node_type = zif_ayaml_types=>cs_type-null iv_value = `` ).
+        CREATE OBJECT lo_val
+          EXPORTING iv_node_type = zif_ayaml_types=>cs_type-null
+                    iv_value     = ``.
       ENDIF.
 
       IF lv_key = `<<`.
         lt_merge_children = lo_val->get_children( ).
-        LOOP AT lt_merge_children INTO lo_m_child.
-          lo_existing = ro_node->get_child_by_key( lo_m_child->get_key( ) ).
+        LOOP AT lt_merge_children ASSIGNING <fs_m_child>.
+          lo_existing = ro_node->get_child_by_key( <fs_m_child>->get_key( ) ).
           IF lo_existing IS INITIAL.
-            ro_node->add_child( lo_m_child->clone( ) ).
+            ro_node->add_child( <fs_m_child>->clone( ) ).
           ENDIF.
         ENDLOOP.
       ELSE.
         lo_val->set_key( lv_key ).
         IF lv_anchor IS NOT INITIAL.
           lo_val->set_anchor( lv_anchor ).
-          register_anchor( iv_name = lv_anchor io_node = lo_val ).
+          register_anchor( iv_name = lv_anchor
+                           io_node = lo_val ).
         ENDIF.
         ro_node->add_child( lo_val ).
       ENDIF.
@@ -887,6 +986,7 @@ CLASS lcl_ast_parser IMPLEMENTATION.
 
   METHOD parse_node.
     DATA ls_tk TYPE zif_ayaml_types=>ty_s_token.
+
     ls_tk = current( ).
 
     CASE ls_tk-type.
@@ -904,14 +1004,16 @@ CLASS lcl_ast_parser IMPLEMENTATION.
       WHEN zif_ayaml_types=>cs_token_type-scalar.
         ro_node = parse_scalar( ).
       WHEN OTHERS.
-        RAISE EXCEPTION NEW zcx_ayaml_error(
-          iv_msg = |Unexpected token '{ ls_tk-type }' at line { ls_tk-line }| ).
+        RAISE EXCEPTION TYPE zcx_ayaml_error
+          EXPORTING iv_msg = |Unexpected token '{ ls_tk-type }' at line { ls_tk-line }|.
     ENDCASE.
   ENDMETHOD.
 
   METHOD parse.
     IF is_eof( ) = abap_true.
-      ro_root = NEW #( iv_node_type = zif_ayaml_types=>cs_type-null iv_value = `` ).
+      CREATE OBJECT ro_root
+        EXPORTING iv_node_type = zif_ayaml_types=>cs_type-null
+                  iv_value     = ``.
       RETURN.
     ENDIF.
 
@@ -920,43 +1022,41 @@ CLASS lcl_ast_parser IMPLEMENTATION.
     ENDIF.
 
     IF is_eof( ) = abap_true.
-      ro_root = NEW #( iv_node_type = zif_ayaml_types=>cs_type-null iv_value = `` ).
+      CREATE OBJECT ro_root
+        EXPORTING iv_node_type = zif_ayaml_types=>cs_type-null
+                  iv_value     = ``.
       RETURN.
     ENDIF.
 
     ro_root = parse_node( current( )-indent_num ).
   ENDMETHOD.
-
 ENDCLASS.
 
 
 CLASS lcl_ast_to_nodes IMPLEMENTATION.
-
   METHOD convert.
     DATA lv_order TYPE i VALUE 0.
+
     CLEAR rt_nodes.
     IF io_root IS INITIAL.
       RETURN.
     ENDIF.
 
-    traverse(
-      EXPORTING
-        io_node  = io_root
-        iv_path  = `/`
-        iv_name  = ``
-        iv_index = 0
-      CHANGING
-        ct_nodes = rt_nodes
-        cv_order = lv_order ).
+    traverse( EXPORTING io_node  = io_root
+                        iv_path  = `/`
+                        iv_name  = ``
+                        iv_index = 0
+              CHANGING  ct_nodes = rt_nodes
+                        cv_order = lv_order ).
   ENDMETHOD.
 
   METHOD traverse.
-    DATA ls_node        TYPE zif_ayaml_types=>ty_s_node.
-    DATA lv_child_path  TYPE string.
-    DATA lt_children    TYPE lcl_ast_node=>ty_t_nodes.
-    DATA lo_child       TYPE REF TO lcl_ast_node.
-    DATA lv_seq_idx     TYPE i.
-    DATA lv_node_type   TYPE zif_ayaml_types=>ty_node_type.
+    DATA ls_node       TYPE zif_ayaml_types=>ty_s_node.
+    DATA lv_node_type  TYPE zif_ayaml_types=>ty_node_type.
+    DATA lv_child_path TYPE string.
+    DATA lt_children   TYPE lcl_ast_node=>ty_t_nodes.
+    DATA lv_seq_idx    TYPE i.
+    FIELD-SYMBOLS <fs_child> TYPE REF TO lcl_ast_node.
 
     IF io_node IS INITIAL.
       RETURN.
@@ -965,7 +1065,7 @@ CLASS lcl_ast_to_nodes IMPLEMENTATION.
     lv_node_type = io_node->get_type( ).
 
     IF iv_name IS NOT INITIAL.
-      cv_order += 1.
+      cv_order = cv_order + 1.
       ls_node-path  = iv_path.
       ls_node-name  = iv_name.
       ls_node-type  = lv_node_type.
@@ -973,9 +1073,9 @@ CLASS lcl_ast_to_nodes IMPLEMENTATION.
       ls_node-index = iv_index.
       ls_node-order = cv_order.
       INSERT ls_node INTO TABLE ct_nodes.
-    ELSEIF lv_node_type <> zif_ayaml_types=>cs_type-mapping
-        AND lv_node_type <> zif_ayaml_types=>cs_type-sequence.
-      cv_order += 1.
+    ELSEIF     lv_node_type <> zif_ayaml_types=>cs_type-mapping
+           AND lv_node_type <> zif_ayaml_types=>cs_type-sequence.
+      cv_order = cv_order + 1.
       ls_node-path  = `/`.
       ls_node-name  = ``.
       ls_node-type  = lv_node_type.
@@ -989,47 +1089,39 @@ CLASS lcl_ast_to_nodes IMPLEMENTATION.
     IF iv_name IS INITIAL.
       lv_child_path = `/`.
     ELSE.
-      lv_child_path = zcl_ayaml_utils=>append_path(
-        iv_base = iv_path
-        iv_name = iv_name ).
+      lv_child_path = zcl_ayaml_utils=>append_path( iv_base = iv_path
+                                                    iv_name = iv_name ).
     ENDIF.
 
     lt_children = io_node->get_children( ).
 
-    IF lv_node_type = zif_ayaml_types=>cs_type-mapping.
-      LOOP AT lt_children INTO lo_child.
-        traverse(
-          EXPORTING
-            io_node  = lo_child
-            iv_path  = lv_child_path
-            iv_name  = lo_child->get_key( )
-            iv_index = 0
-          CHANGING
-            ct_nodes = ct_nodes
-            cv_order = cv_order ).
-      ENDLOOP.
-    ELSEIF lv_node_type = zif_ayaml_types=>cs_type-sequence.
-      lv_seq_idx = 0.
-      LOOP AT lt_children INTO lo_child.
-        lv_seq_idx += 1.
-        traverse(
-          EXPORTING
-            io_node  = lo_child
-            iv_path  = lv_child_path
-            iv_name  = |{ lv_seq_idx }|
-            iv_index = lv_seq_idx
-          CHANGING
-            ct_nodes = ct_nodes
-            cv_order = cv_order ).
-      ENDLOOP.
-    ENDIF.
+    CASE lv_node_type.
+      WHEN zif_ayaml_types=>cs_type-mapping.
+        LOOP AT lt_children ASSIGNING <fs_child>.
+          traverse( EXPORTING io_node  = <fs_child>
+                              iv_path  = lv_child_path
+                              iv_name  = <fs_child>->get_key( )
+                              iv_index = 0
+                    CHANGING  ct_nodes = ct_nodes
+                              cv_order = cv_order ).
+        ENDLOOP.
+      WHEN zif_ayaml_types=>cs_type-sequence.
+        lv_seq_idx = 0.
+        LOOP AT lt_children ASSIGNING <fs_child>.
+          lv_seq_idx = lv_seq_idx + 1.
+          traverse( EXPORTING io_node  = <fs_child>
+                              iv_path  = lv_child_path
+                              iv_name  = |{ lv_seq_idx }|
+                              iv_index = lv_seq_idx
+                    CHANGING  ct_nodes = ct_nodes
+                              cv_order = cv_order ).
+        ENDLOOP.
+    ENDCASE.
   ENDMETHOD.
-
 ENDCLASS.
 
 
 CLASS lcl_serializer IMPLEMENTATION.
-
   METHOD stringify.
     DATA lv_base TYPE i.
 
@@ -1062,24 +1154,28 @@ CLASS lcl_serializer IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD build_yaml.
-    DATA lt_children   TYPE STANDARD TABLE OF zif_ayaml_types=>ty_s_node WITH EMPTY KEY.
-    DATA ls_node       TYPE zif_ayaml_types=>ty_s_node.
+    DATA lt_children   TYPE zif_ayaml_types=>ty_t_nodes_flat.
     DATA lv_indent     TYPE string.
-    DATA lv_line       TYPE string.
-    DATA lv_child_yaml TYPE string.
-    DATA lv_escaped    TYPE string.
     DATA lv_is_seq     TYPE abap_bool.
-    FIELD-SYMBOLS <ls_child> TYPE zif_ayaml_types=>ty_s_node.
+    DATA lv_child_yaml TYPE string.
+    DATA lv_line       TYPE string.
+    DATA lv_first_line TYPE string.
+    DATA lv_rest       TYPE string.
+    DATA lv_escaped    TYPE string.
+    DATA lv_sub_len    TYPE i.
+    FIELD-SYMBOLS <fs_node>  TYPE zif_ayaml_types=>ty_s_node.
+    FIELD-SYMBOLS <fs_child> TYPE zif_ayaml_types=>ty_s_node.
 
-    LOOP AT it_nodes INTO ls_node USING KEY path_key WHERE path = iv_path.
-      INSERT ls_node INTO TABLE lt_children.
+    LOOP AT it_nodes ASSIGNING <fs_node> USING KEY path_key WHERE path = iv_path.
+      INSERT <fs_node> INTO TABLE lt_children.
     ENDLOOP.
 
     SORT lt_children BY order.
 
-    lv_is_seq = zcl_ayaml_utils=>is_sequence_path( it_nodes = it_nodes iv_path = iv_path ).
+    lv_is_seq = zcl_ayaml_utils=>is_sequence_path( it_nodes = it_nodes
+                                                   iv_path  = iv_path ).
 
-    LOOP AT lt_children ASSIGNING <ls_child>.
+    LOOP AT lt_children ASSIGNING <fs_child>.
       CLEAR lv_indent.
       DO iv_indent TIMES.
         lv_indent = |{ lv_indent }  |.
@@ -1087,21 +1183,22 @@ CLASS lcl_serializer IMPLEMENTATION.
 
       CASE lv_is_seq.
         WHEN abap_true.
-          CASE <ls_child>-type.
+          CASE <fs_child>-type.
             WHEN zif_ayaml_types=>cs_type-mapping.
               lv_child_yaml = build_yaml( it_nodes  = it_nodes
-                                          iv_path   = |{ iv_path }{ <ls_child>-name }/|
+                                          iv_path   = |{ iv_path }{ <fs_child>-name }/|
                                           iv_indent = iv_indent + 1 ).
               IF lv_child_yaml IS INITIAL.
-                lv_line = |{ lv_indent }- { <ls_child>-name }:|.
+                lv_line = |{ lv_indent }- { <fs_child>-name }:|.
                 rv_yaml = rv_yaml && lv_line && cl_abap_char_utilities=>newline.
               ELSE.
-                DATA(lv_first_line) = substring( val = lv_child_yaml
-                                                 off = ( iv_indent + 1 ) * 2
-                                                 len = strlen( lv_child_yaml ) - ( iv_indent + 1 ) * 2 ).
+                lv_sub_len = strlen( lv_child_yaml ) - ( ( iv_indent + 1 ) * 2 ).
+                lv_first_line = substring( val = lv_child_yaml
+                                           off = ( iv_indent + 1 ) * 2
+                                           len = lv_sub_len ).
                 rv_yaml = |{ rv_yaml }{ lv_indent }- { lv_first_line }|.
-                DATA(lv_rest) = substring( val = lv_child_yaml
-                                           off = ( iv_indent + 1 ) * 2 + strlen( lv_first_line ) ).
+                lv_rest = substring( val = lv_child_yaml
+                                     off = ( ( iv_indent + 1 ) * 2 ) + strlen( lv_first_line ) ).
                 IF lv_rest IS NOT INITIAL.
                   rv_yaml = rv_yaml && lv_rest.
                 ENDIF.
@@ -1109,20 +1206,20 @@ CLASS lcl_serializer IMPLEMENTATION.
             WHEN zif_ayaml_types=>cs_type-sequence.
               lv_line = |{ lv_indent }-|.
               lv_child_yaml = build_yaml( it_nodes  = it_nodes
-                                          iv_path   = |{ iv_path }{ <ls_child>-name }/|
+                                          iv_path   = |{ iv_path }{ <fs_child>-name }/|
                                           iv_indent = iv_indent + 1 ).
               rv_yaml = rv_yaml && lv_line && cl_abap_char_utilities=>newline && lv_child_yaml.
             WHEN OTHERS.
-              lv_escaped = format_scalar( <ls_child> ).
+              lv_escaped = format_scalar( <fs_child> ).
               lv_line = |{ lv_indent }- { lv_escaped }|.
               rv_yaml = rv_yaml && lv_line && cl_abap_char_utilities=>newline.
           ENDCASE.
         WHEN OTHERS.
-          CASE <ls_child>-type.
+          CASE <fs_child>-type.
             WHEN zif_ayaml_types=>cs_type-mapping.
-              lv_line = |{ lv_indent }{ <ls_child>-name }:|.
+              lv_line = |{ lv_indent }{ <fs_child>-name }:|.
               lv_child_yaml = build_yaml( it_nodes  = it_nodes
-                                          iv_path   = |{ iv_path }{ <ls_child>-name }/|
+                                          iv_path   = |{ iv_path }{ <fs_child>-name }/|
                                           iv_indent = iv_indent + 1 ).
               IF lv_child_yaml IS INITIAL.
                 rv_yaml = rv_yaml && lv_line && cl_abap_char_utilities=>newline.
@@ -1130,9 +1227,9 @@ CLASS lcl_serializer IMPLEMENTATION.
                 rv_yaml = rv_yaml && lv_line && cl_abap_char_utilities=>newline && lv_child_yaml.
               ENDIF.
             WHEN zif_ayaml_types=>cs_type-sequence.
-              lv_line = |{ lv_indent }{ <ls_child>-name }:|.
+              lv_line = |{ lv_indent }{ <fs_child>-name }:|.
               lv_child_yaml = build_yaml( it_nodes  = it_nodes
-                                          iv_path   = |{ iv_path }{ <ls_child>-name }/|
+                                          iv_path   = |{ iv_path }{ <fs_child>-name }/|
                                           iv_indent = iv_indent + 1 ).
               IF lv_child_yaml IS INITIAL.
                 rv_yaml = |{ rv_yaml }{ lv_line } []{ cl_abap_char_utilities=>newline }|.
@@ -1140,104 +1237,111 @@ CLASS lcl_serializer IMPLEMENTATION.
                 rv_yaml = rv_yaml && lv_line && cl_abap_char_utilities=>newline && lv_child_yaml.
               ENDIF.
             WHEN OTHERS.
-              lv_escaped = format_scalar( <ls_child> ).
-              lv_line = |{ lv_indent }{ <ls_child>-name }: { lv_escaped }|.
+              lv_escaped = format_scalar( <fs_child> ).
+              lv_line = |{ lv_indent }{ <fs_child>-name }: { lv_escaped }|.
               rv_yaml = rv_yaml && lv_line && cl_abap_char_utilities=>newline.
           ENDCASE.
       ENDCASE.
     ENDLOOP.
   ENDMETHOD.
-
 ENDCLASS.
 
 
 CLASS lcl_deserializer IMPLEMENTATION.
-
   METHOD deserialize.
-    map_node(
-      EXPORTING it_nodes  = it_nodes
-                iv_path   = `/`
-      CHANGING  cv_target = ev_data ).
+    map_node( EXPORTING it_nodes  = it_nodes
+                        iv_path   = `/`
+              CHANGING  cv_target = ev_data ).
   ENDMETHOD.
 
   METHOD map_node.
-    DATA lo_descr TYPE REF TO cl_abap_typedescr.
+    DATA lo_descr  TYPE REF TO cl_abap_typedescr.
     DATA lo_struct TYPE REF TO cl_abap_structdescr.
     DATA lo_table  TYPE REF TO cl_abap_tabledescr.
     DATA lo_elem   TYPE REF TO cl_abap_elemdescr.
-    DATA ls_node   TYPE zif_ayaml_types=>ty_s_node.
     DATA lv_parent TYPE string.
     DATA lv_name   TYPE string.
+    FIELD-SYMBOLS <fs_node> TYPE zif_ayaml_types=>ty_s_node.
 
     lo_descr = cl_abap_typedescr=>describe_by_data( cv_target ).
     CASE lo_descr->kind.
       WHEN cl_abap_typedescr=>kind_struct.
         lo_struct ?= lo_descr.
-        map_structure(
-          EXPORTING it_nodes  = it_nodes
-                    iv_path   = iv_path
-                    io_struct = lo_struct
-          CHANGING  cv_target = cv_target ).
+        map_structure( EXPORTING it_nodes  = it_nodes
+                                 iv_path   = iv_path
+                                 io_struct = lo_struct
+                       CHANGING  cv_target = cv_target ).
       WHEN cl_abap_typedescr=>kind_table.
         lo_table ?= lo_descr.
-        map_table(
-          EXPORTING it_nodes  = it_nodes
-                    iv_path   = iv_path
-                    io_table  = lo_table
-          CHANGING  cv_target = cv_target ).
+        map_table( EXPORTING it_nodes  = it_nodes
+                             iv_path   = iv_path
+                             io_table  = lo_table
+                   CHANGING  cv_target = cv_target ).
       WHEN cl_abap_typedescr=>kind_elem.
         lo_elem ?= lo_descr.
         zcl_ayaml_utils=>split_path( EXPORTING iv_path = iv_path
                                      IMPORTING ev_path = lv_parent
                                                ev_name = lv_name ).
-        READ TABLE it_nodes WITH KEY path = lv_parent name = lv_name INTO ls_node.
+        READ TABLE it_nodes WITH KEY path = lv_parent
+                                     name = lv_name ASSIGNING <fs_node>.
         IF sy-subrc = 0.
-          map_elementary(
-            EXPORTING is_node   = ls_node
-                      io_elem   = lo_elem
-            CHANGING  cv_target = cv_target ).
+          map_elementary( EXPORTING is_node   = <fs_node>
+                                    io_elem   = lo_elem
+                          CHANGING  cv_target = cv_target ).
         ENDIF.
     ENDCASE.
   ENDMETHOD.
 
   METHOD map_structure.
-    DATA lt_comps TYPE abap_component_tab.
-    DATA ls_comp  TYPE abap_componentdescr.
-    DATA ls_node  TYPE zif_ayaml_types=>ty_s_node.
-    DATA lv_sub   TYPE string.
-    FIELD-SYMBOLS <lv_field> TYPE any.
+    DATA lt_comps     TYPE abap_component_tab.
+    DATA lv_sub       TYPE string.
+    DATA lo_elem      TYPE REF TO cl_abap_elemdescr.
+    DATA lv_camel     TYPE string.
+    DATA lv_snake     TYPE string.
+    DATA lv_lower     TYPE string.
+    DATA lv_comp_name TYPE string.
+    FIELD-SYMBOLS <fs_comp>  TYPE abap_componentdescr.
+    FIELD-SYMBOLS <fs_node>  TYPE zif_ayaml_types=>ty_s_node.
+    FIELD-SYMBOLS <fs_field> TYPE any.
 
     lt_comps = io_struct->get_components( ).
-    LOOP AT lt_comps INTO ls_comp.
-      ASSIGN COMPONENT ls_comp-name OF STRUCTURE cv_target TO <lv_field>.
+    LOOP AT lt_comps ASSIGNING <fs_comp>.
+      ASSIGN COMPONENT <fs_comp>-name OF STRUCTURE cv_target TO <fs_field>.
       IF sy-subrc <> 0.
         CONTINUE.
       ENDIF.
 
-      READ TABLE it_nodes WITH KEY path = iv_path name = to_lower( ls_comp-name ) INTO ls_node.
+      lv_lower = to_lower( <fs_comp>-name ).
+      READ TABLE it_nodes WITH KEY path = iv_path
+                                   name = lv_lower ASSIGNING <fs_node>.
       IF sy-subrc <> 0.
-        READ TABLE it_nodes WITH KEY path = iv_path name = zcl_ayaml_utils=>to_camel_case( ls_comp-name ) INTO ls_node.
+        lv_comp_name = <fs_comp>-name.
+        lv_camel = zcl_ayaml_utils=>to_camel_case( lv_comp_name ).
+        READ TABLE it_nodes WITH KEY path = iv_path
+                                     name = lv_camel ASSIGNING <fs_node>.
       ENDIF.
       IF sy-subrc <> 0.
-        READ TABLE it_nodes WITH KEY path = iv_path name = zcl_ayaml_utils=>to_snake_case( ls_comp-name ) INTO ls_node.
+        lv_comp_name = <fs_comp>-name.
+        lv_snake = zcl_ayaml_utils=>to_snake_case( lv_comp_name ).
+        READ TABLE it_nodes WITH KEY path = iv_path
+                                     name = lv_snake ASSIGNING <fs_node>.
       ENDIF.
       IF sy-subrc <> 0.
-        READ TABLE it_nodes WITH KEY path = iv_path name = ls_comp-name INTO ls_node.
+        READ TABLE it_nodes WITH KEY path = iv_path
+                                     name = <fs_comp>-name ASSIGNING <fs_node>.
       ENDIF.
 
       IF sy-subrc = 0.
-        IF ls_node-type = zif_ayaml_types=>cs_type-mapping OR ls_node-type = zif_ayaml_types=>cs_type-sequence.
-          lv_sub = |{ iv_path }{ ls_node-name }/|.
-          map_node(
-            EXPORTING it_nodes  = it_nodes
-                      iv_path   = lv_sub
-            CHANGING  cv_target = <lv_field> ).
+        IF <fs_node>-type = zif_ayaml_types=>cs_type-mapping OR <fs_node>-type = zif_ayaml_types=>cs_type-sequence.
+          lv_sub = |{ iv_path }{ <fs_node>-name }/|.
+          map_node( EXPORTING it_nodes  = it_nodes
+                              iv_path   = lv_sub
+                    CHANGING  cv_target = <fs_field> ).
         ELSE.
-          DATA(lo_elem) = CAST cl_abap_elemdescr( cl_abap_typedescr=>describe_by_data( <lv_field> ) ).
-          map_elementary(
-            EXPORTING is_node   = ls_node
-                      io_elem   = lo_elem
-            CHANGING  cv_target = <lv_field> ).
+          lo_elem ?= cl_abap_typedescr=>describe_by_data( <fs_field> ).
+          map_elementary( EXPORTING is_node   = <fs_node>
+                                    io_elem   = lo_elem
+                          CHANGING  cv_target = <fs_field> ).
         ENDIF.
       ENDIF.
     ENDLOOP.
@@ -1245,48 +1349,55 @@ CLASS lcl_deserializer IMPLEMENTATION.
 
   METHOD map_table.
     DATA lo_line_descr TYPE REF TO cl_abap_typedescr.
-    DATA lt_children   TYPE STANDARD TABLE OF zif_ayaml_types=>ty_s_node WITH EMPTY KEY.
-    DATA ls_node       TYPE zif_ayaml_types=>ty_s_node.
+    DATA lt_children   TYPE zif_ayaml_types=>ty_t_nodes_flat.
+    DATA lr_line       TYPE REF TO data.
     DATA lv_item_path  TYPE string.
-    FIELD-SYMBOLS <lt_tab>  TYPE ANY TABLE.
-    FIELD-SYMBOLS <ls_line> TYPE any.
-    DATA lr_line TYPE REF TO data.
+    DATA lo_elem       TYPE REF TO cl_abap_elemdescr.
+    FIELD-SYMBOLS <fs_tab>   TYPE ANY TABLE.
+    FIELD-SYMBOLS <fs_line>  TYPE any.
+    FIELD-SYMBOLS <fs_node>  TYPE zif_ayaml_types=>ty_s_node.
+    FIELD-SYMBOLS <fs_child> TYPE zif_ayaml_types=>ty_s_node.
 
-    ASSIGN cv_target TO <lt_tab>.
-    CLEAR <lt_tab>.
+    ASSIGN cv_target TO <fs_tab>.
+    IF sy-subrc <> 0.
+      RETURN.
+    ENDIF.
+    CLEAR <fs_tab>.
 
-    LOOP AT it_nodes INTO ls_node USING KEY path_key WHERE path = iv_path.
-      INSERT ls_node INTO TABLE lt_children.
+    LOOP AT it_nodes ASSIGNING <fs_node> USING KEY path_key WHERE path = iv_path.
+      INSERT <fs_node> INTO TABLE lt_children.
     ENDLOOP.
     SORT lt_children BY order.
 
     lo_line_descr = io_table->get_table_line_type( ).
     CREATE DATA lr_line TYPE HANDLE lo_line_descr.
-    ASSIGN lr_line->* TO <ls_line>.
+    ASSIGN lr_line->* TO <fs_line>.
+    IF sy-subrc <> 0.
+      RETURN.
+    ENDIF.
 
-    LOOP AT lt_children INTO ls_node.
-      CLEAR <ls_line>.
-      IF ls_node-type = zif_ayaml_types=>cs_type-mapping OR ls_node-type = zif_ayaml_types=>cs_type-sequence.
-        lv_item_path = |{ iv_path }{ ls_node-name }/|.
-        map_node(
-          EXPORTING it_nodes  = it_nodes
-                    iv_path   = lv_item_path
-          CHANGING  cv_target = <ls_line> ).
-      ELSE.
-        IF lo_line_descr->kind = cl_abap_typedescr=>kind_elem.
-          DATA(lo_elem) = CAST cl_abap_elemdescr( lo_line_descr ).
-          map_elementary(
-            EXPORTING is_node   = ls_node
-                      io_elem   = lo_elem
-            CHANGING  cv_target = <ls_line> ).
-        ENDIF.
+    LOOP AT lt_children ASSIGNING <fs_child>.
+      CLEAR <fs_line>.
+      IF <fs_child>-type = zif_ayaml_types=>cs_type-mapping OR <fs_child>-type = zif_ayaml_types=>cs_type-sequence.
+        lv_item_path = |{ iv_path }{ <fs_child>-name }/|.
+        map_node( EXPORTING it_nodes  = it_nodes
+                            iv_path   = lv_item_path
+                  CHANGING  cv_target = <fs_line> ).
+      ELSEIF lo_line_descr->kind = cl_abap_typedescr=>kind_elem.
+        lo_elem ?= lo_line_descr.
+        map_elementary( EXPORTING is_node   = <fs_child>
+                                  io_elem   = lo_elem
+                        CHANGING  cv_target = <fs_line> ).
       ENDIF.
-      INSERT <ls_line> INTO TABLE <lt_tab>.
+      INSERT <fs_line> INTO TABLE <fs_tab>.
     ENDLOOP.
   ENDMETHOD.
 
   METHOD map_elementary.
     DATA lv_val TYPE string.
+    DATA lv_int TYPE i.
+    DATA lv_flt TYPE f.
+
     lv_val = is_node-value.
 
     CASE io_elem->type_kind.
@@ -1295,7 +1406,8 @@ CLASS lcl_deserializer IMPLEMENTATION.
           OR cl_abap_typedescr=>typekind_int2
           OR cl_abap_typedescr=>typekind_int8.
         TRY.
-            cv_target = CONV i( lv_val ).
+            lv_int = lv_val.
+            cv_target = lv_int.
           CATCH cx_root.
             CLEAR cv_target.
         ENDTRY.
@@ -1305,7 +1417,8 @@ CLASS lcl_deserializer IMPLEMENTATION.
           OR cl_abap_typedescr=>typekind_decfloat34
           OR cl_abap_typedescr=>typekind_packed.
         TRY.
-            cv_target = CONV f( lv_val ).
+            lv_flt = lv_val.
+            cv_target = lv_flt.
           CATCH cx_root.
             CLEAR cv_target.
         ENDTRY.
@@ -1319,18 +1432,16 @@ CLASS lcl_deserializer IMPLEMENTATION.
           OR cl_abap_typedescr=>typekind_string
           OR cl_abap_typedescr=>typekind_clike
           OR cl_abap_typedescr=>typekind_csequence.
-        IF io_elem->output_length = 1 AND ( io_elem->absolute_name CS `ABAP_BOOL` OR io_elem->absolute_name CS `ABAP_BOOLEAN` ).
-          IF lv_val = `true` OR lv_val = `X` OR lv_val = `1`.
-            cv_target = abap_true.
-          ELSE.
-            cv_target = abap_false.
-          ENDIF.
-        ELSE.
-          cv_target = lv_val.
+        IF     io_elem->output_length = 1
+           AND (    io_elem->absolute_name CS `ABAP_BOOL`
+                 OR io_elem->absolute_name CS `ABAP_BOOLEAN`
+                 OR io_elem->absolute_name CS `XSDBOOL` ).
+          cv_target = boolc( lv_val = `true` OR lv_val = `X` OR lv_val = `1` ).
+          RETURN.
         ENDIF.
+        cv_target = lv_val.
       WHEN OTHERS.
         cv_target = lv_val.
     ENDCASE.
   ENDMETHOD.
-
 ENDCLASS.

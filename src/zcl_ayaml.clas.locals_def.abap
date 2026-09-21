@@ -1,7 +1,7 @@
 CLASS lcl_ast_node DEFINITION FINAL CREATE PUBLIC.
 
   PUBLIC SECTION.
-    TYPES ty_t_nodes TYPE STANDARD TABLE OF REF TO lcl_ast_node WITH EMPTY KEY.
+    TYPES ty_t_nodes TYPE STANDARD TABLE OF REF TO lcl_ast_node WITH DEFAULT KEY.
 
     METHODS constructor
       IMPORTING iv_node_type TYPE zif_ayaml_types=>ty_node_type
@@ -112,15 +112,14 @@ CLASS lcl_scanner DEFINITION FINAL CREATE PUBLIC.
       RAISING   zcx_ayaml_error.
 
     METHODS collect_block_lines
-      IMPORTING iv_base_indent TYPE i
-      CHANGING  ct_lines       TYPE string_table
-      RETURNING VALUE(rv_count) TYPE i.
+      IMPORTING iv_base_indent  TYPE i
+      RETURNING VALUE(rt_lines) TYPE string_table.
 
     METHODS format_block_lines
-      IMPORTING it_lines       TYPE string_table
-                iv_indicator   TYPE string
-                iv_chomping    TYPE c
-      RETURNING VALUE(rv_val)  TYPE string.
+      IMPORTING it_lines      TYPE string_table
+                iv_indicator  TYPE string
+                iv_chomping   TYPE string
+      RETURNING VALUE(rv_val) TYPE string.
 
     METHODS scan_plain_scalar
       RETURNING VALUE(rv_val) TYPE string.
@@ -272,8 +271,8 @@ CLASS lcl_deserializer DEFINITION FINAL CREATE PUBLIC.
 
   PRIVATE SECTION.
     CLASS-METHODS map_node
-      IMPORTING it_nodes TYPE zif_ayaml_types=>ty_t_nodes
-                iv_path  TYPE string
+      IMPORTING it_nodes  TYPE zif_ayaml_types=>ty_t_nodes
+                iv_path   TYPE string
       CHANGING  cv_target TYPE any
       RAISING   zcx_ayaml_error.
 

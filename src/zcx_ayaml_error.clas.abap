@@ -14,7 +14,6 @@ ENDCLASS.
 
 
 CLASS zcx_ayaml_error IMPLEMENTATION.
-
   METHOD constructor.
     super->constructor( ).
     mv_msg = iv_msg.
@@ -31,5 +30,4 @@ CLASS zcx_ayaml_error IMPLEMENTATION.
       result = super->if_message~get_text( ).
     ENDIF.
   ENDMETHOD.
-
 ENDCLASS.

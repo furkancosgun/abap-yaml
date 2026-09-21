@@ -54,11 +54,6 @@ CLASS zcl_ayaml_utils DEFINITION PUBLIC FINAL CREATE PUBLIC.
                 iv_type       TYPE zif_ayaml_types=>ty_node_type
       RETURNING VALUE(rv_str) TYPE string.
 
-    CLASS-METHODS detect_yaml_scalar
-      IMPORTING iv_raw   TYPE string
-      EXPORTING ev_type  TYPE zif_ayaml_types=>ty_node_type
-                ev_value TYPE string.
-
     CLASS-METHODS format_date
       IMPORTING iv_date       TYPE d
       RETURNING VALUE(rv_str) TYPE string.
@@ -77,6 +72,11 @@ CLASS zcl_ayaml_utils DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING VALUE(rv_timestamp) TYPE timestamp
       RAISING   zcx_ayaml_error.
 
+    CLASS-METHODS detect_yaml_scalar
+      IMPORTING iv_raw   TYPE string
+      EXPORTING ev_type  TYPE zif_ayaml_types=>ty_node_type
+                ev_value TYPE string.
+
     CLASS-METHODS to_camel_case
       IMPORTING iv_name        TYPE string
       RETURNING VALUE(rv_name) TYPE string.
@@ -94,38 +94,42 @@ ENDCLASS.
 
 
 CLASS zcl_ayaml_utils IMPLEMENTATION.
-
   METHOD normalize_path.
     DATA lv_len  TYPE i.
-    DATA lv_last TYPE c LENGTH 1.
     DATA lv_off  TYPE i.
+    DATA lv_last TYPE string.
 
     rv_norm = iv_path.
     IF rv_norm IS INITIAL.
       rv_norm = `/`.
       RETURN.
     ENDIF.
-    IF substring( val = rv_norm off = 0 len = 1 ) <> `/`.
+    IF substring( val = rv_norm
+                  off = 0
+                  len = 1 ) <> `/`.
       rv_norm = |/{ rv_norm }|.
     ENDIF.
     lv_len = strlen( rv_norm ).
     WHILE lv_len > 1.
       lv_off = lv_len - 1.
-      lv_last = substring( val = rv_norm off = lv_off len = 1 ).
+      lv_last = substring( val = rv_norm
+                           off = lv_off
+                           len = 1 ).
       IF lv_last <> `/`.
         EXIT.
       ENDIF.
-      lv_len -= 1.
-      rv_norm = substring( val = rv_norm len = lv_len ).
+      lv_len = lv_len - 1.
+      rv_norm = substring( val = rv_norm
+                           len = lv_len ).
     ENDWHILE.
   ENDMETHOD.
 
   METHOD split_path.
     DATA lv_norm   TYPE string.
     DATA lv_len    TYPE i.
+    DATA lv_found  TYPE abap_bool.
     DATA lv_last   TYPE i.
     DATA lv_offset TYPE i.
-    DATA lv_found  TYPE abap_bool.
 
     lv_norm = normalize_path( iv_path ).
     lv_len = strlen( lv_norm ).
@@ -140,7 +144,9 @@ CLASS zcl_ayaml_utils IMPLEMENTATION.
     lv_last = 0.
     DO lv_len TIMES.
       lv_offset = sy-index - 1.
-      IF substring( val = lv_norm off = lv_offset len = 1 ) = `/`.
+      IF substring( val = lv_norm
+                    off = lv_offset
+                    len = 1 ) = `/`.
         lv_last = lv_offset.
         lv_found = abap_true.
       ENDIF.
@@ -152,12 +158,16 @@ CLASS zcl_ayaml_utils IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    ev_path = substring( val = lv_norm len = lv_last + 1 ).
-    ev_name = substring( val = lv_norm off = lv_last + 1 len = lv_len - lv_last - 1 ).
+    ev_path = substring( val = lv_norm
+                         len = lv_last + 1 ).
+    ev_name = substring( val = lv_norm
+                         off = lv_last + 1
+                         len = lv_len - lv_last - 1 ).
   ENDMETHOD.
 
   METHOD get_parent_path.
     DATA lv_parent TYPE string.
+    " TODO: variable is assigned but never used (ABAP cleaner)
     DATA lv_name   TYPE string.
 
     split_path( EXPORTING iv_path = iv_path
@@ -189,27 +199,40 @@ CLASS zcl_ayaml_utils IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD is_sequence_path.
-    DATA lv_trim   TYPE string.
     DATA lv_parent TYPE string.
     DATA lv_name   TYPE string.
-    DATA ls_node   TYPE zif_ayaml_types=>ty_s_node.
+    DATA lv_trim   TYPE string.
     DATA lv_len    TYPE i.
+    FIELD-SYMBOLS <fs_node> TYPE zif_ayaml_types=>ty_s_node.
 
     IF iv_path = `/`.
-      READ TABLE it_nodes WITH KEY path_key COMPONENTS path = `/` INTO ls_node.
-      rv_yes = xsdbool( sy-subrc = 0 AND ls_node-index > 0 ).
+      READ TABLE it_nodes WITH KEY path_key COMPONENTS path = `/` ASSIGNING <fs_node>.
+      IF sy-subrc = 0 AND <fs_node>-index > 0.
+        rv_yes = abap_true.
+      ELSE.
+        rv_yes = abap_false.
+      ENDIF.
       RETURN.
     ENDIF.
+
     lv_trim = iv_path.
     lv_len = strlen( lv_trim ).
-    IF lv_len > 1 AND substring( val = lv_trim off = lv_len - 1 len = 1 ) = `/`.
-      lv_trim = substring( val = lv_trim len = lv_len - 1 ).
+    IF lv_len > 1 AND substring( val = lv_trim
+                                 off = lv_len - 1
+                                 len = 1 ) = `/`.
+      lv_trim = substring( val = lv_trim
+                           len = lv_len - 1 ).
     ENDIF.
     split_path( EXPORTING iv_path = lv_trim
                 IMPORTING ev_path = lv_parent
                           ev_name = lv_name ).
-    READ TABLE it_nodes WITH KEY path = lv_parent name = lv_name INTO ls_node.
-    rv_yes = xsdbool( sy-subrc = 0 AND ls_node-type = zif_ayaml_types=>cs_type-sequence ).
+    READ TABLE it_nodes WITH KEY path = lv_parent
+                                 name = lv_name ASSIGNING <fs_node>.
+    IF sy-subrc = 0.
+      rv_yes = boolc( <fs_node>-type = zif_ayaml_types=>cs_type-sequence ).
+    ELSE.
+      rv_yes = abap_false.
+    ENDIF.
   ENDMETHOD.
 
   METHOD escape_text.
@@ -232,21 +255,29 @@ CLASS zcl_ayaml_utils IMPLEMENTATION.
 
   METHOD strip_quotes.
     DATA lv_len   TYPE i.
+    DATA lv_first TYPE string.
+    DATA lv_last  TYPE string.
     DATA lv_off   TYPE i.
-    DATA lv_first TYPE c LENGTH 1.
-    DATA lv_last  TYPE c LENGTH 1.
 
     lv_len = strlen( iv_value ).
     IF lv_len >= 2.
-      lv_first = substring( val = iv_value off = 0 len = 1 ).
+      lv_first = substring( val = iv_value
+                            off = 0
+                            len = 1 ).
       lv_off = lv_len - 1.
-      lv_last = substring( val = iv_value off = lv_off len = 1 ).
+      lv_last = substring( val = iv_value
+                           off = lv_off
+                           len = 1 ).
       IF lv_first = `"` AND lv_last = `"`.
-        rv_value = substring( val = iv_value off = 1 len = lv_len - 2 ).
+        rv_value = substring( val = iv_value
+                              off = 1
+                              len = lv_len - 2 ).
         RETURN.
       ENDIF.
       IF lv_first = `'` AND lv_last = `'`.
-        rv_value = substring( val = iv_value off = 1 len = lv_len - 2 ).
+        rv_value = substring( val = iv_value
+                              off = 1
+                              len = lv_len - 2 ).
         REPLACE ALL OCCURRENCES OF `''` IN rv_value WITH `'`.
         RETURN.
       ENDIF.
@@ -266,18 +297,22 @@ CLASS zcl_ayaml_utils IMPLEMENTATION.
       RETURN.
     ENDIF.
     IF    iv_value CS `"` OR iv_value CS `\`
-        OR iv_value CS cl_abap_char_utilities=>horizontal_tab
-        OR iv_value CS cl_abap_char_utilities=>newline
-        OR iv_value CS cl_abap_char_utilities=>cr_lf
-        OR iv_value CS `:` OR iv_value CS `#`.
+       OR iv_value CS cl_abap_char_utilities=>horizontal_tab
+       OR iv_value CS cl_abap_char_utilities=>newline
+       OR iv_value CS cl_abap_char_utilities=>cr_lf
+       OR iv_value CS `:` OR iv_value CS `#`.
       rv_plain = abap_false.
       RETURN.
     ENDIF.
     lv_len = strlen( iv_value ).
     IF lv_len > 0.
-      lv_first = substring( val = iv_value off = 0 len = 1 ).
+      lv_first = substring( val = iv_value
+                            off = 0
+                            len = 1 ).
       lv_off = lv_len - 1.
-      lv_last = substring( val = iv_value off = lv_off len = 1 ).
+      lv_last = substring( val = iv_value
+                           off = lv_off
+                           len = 1 ).
       IF lv_first = ` ` OR lv_last = ` `.
         rv_plain = abap_false.
         RETURN.
@@ -324,7 +359,7 @@ CLASS zcl_ayaml_utils IMPLEMENTATION.
         TRY.
             lo_elem ?= lo_descr.
             IF     lo_elem->output_length = 1
-                AND (    lo_descr->absolute_name CS `ABAP_BOOL`
+               AND (    lo_descr->absolute_name CS `ABAP_BOOL`
                      OR lo_descr->absolute_name CS `ABAP_BOOLEAN` ).
               rv_type = zif_ayaml_types=>cs_type-boolean.
               RETURN.
@@ -347,7 +382,8 @@ CLASS zcl_ayaml_utils IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD to_string.
-    DATA lv_tmp TYPE string.
+    DATA lv_tmp  TYPE string.
+    DATA lv_date TYPE d.
 
     CASE iv_type.
       WHEN zif_ayaml_types=>cs_type-number.
@@ -362,7 +398,8 @@ CLASS zcl_ayaml_utils IMPLEMENTATION.
         ENDIF.
       WHEN zif_ayaml_types=>cs_type-date.
         TRY.
-            rv_str = format_date( CONV d( iv_val ) ).
+            lv_date = iv_val.
+            rv_str = format_date( lv_date ).
           CATCH cx_root.
             rv_str = |{ iv_val }|.
         ENDTRY.
@@ -380,14 +417,14 @@ CLASS zcl_ayaml_utils IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD format_date.
-    DATA lv_year  TYPE c LENGTH 4.
-    DATA lv_month TYPE c LENGTH 2.
-    DATA lv_day   TYPE c LENGTH 2.
+    DATA lv_year  TYPE string.
+    DATA lv_month TYPE string.
+    DATA lv_day   TYPE string.
 
-    lv_year = iv_date(4).
-    lv_month = substring( val = iv_date off = 4 len = 2 ).
-    lv_day = substring( val = iv_date off = 6 len = 2 ).
-    rv_str = |{ lv_year }-{ lv_month }-{ lv_day }|.
+    lv_year  = iv_date(4).
+    lv_month = iv_date+4(2).
+    lv_day   = iv_date+6(2).
+    rv_str   = |{ lv_year }-{ lv_month }-{ lv_day }|.
   ENDMETHOD.
 
   METHOD format_timestamp.
@@ -395,9 +432,7 @@ CLASS zcl_ayaml_utils IMPLEMENTATION.
     DATA lv_time TYPE t.
 
     CONVERT TIME STAMP iv_timestamp TIME ZONE sy-zonlo INTO DATE lv_date TIME lv_time.
-    rv_str = |{ format_date( lv_date ) }T{ lv_time(2) }:|
-          && |{ substring( val = lv_time off = 2 len = 2 ) }:|
-          && |{ substring( val = lv_time off = 4 len = 2 ) }Z|.
+    rv_str = |{ format_date( lv_date ) }T{ lv_time(2) }:{ lv_time+2(2) }:{ lv_time+4(2) }Z|.
   ENDMETHOD.
 
   METHOD parse_date.
@@ -409,10 +444,15 @@ CLASS zcl_ayaml_utils IMPLEMENTATION.
       CLEAR rv_date.
       RETURN.
     ENDIF.
-    FIND FIRST OCCURRENCE OF PCRE '^(\d{4})-(\d{2})-(\d{2})(T|$)' IN iv_value
+    IF strlen( iv_value ) = 8 AND iv_value CO '0123456789'.
+      rv_date = iv_value.
+      RETURN.
+    ENDIF.
+    FIND FIRST OCCURRENCE OF REGEX '^(\d{4})-(\d{2})-(\d{2})(T|$)' IN iv_value
          SUBMATCHES lv_y lv_m lv_d.
     IF sy-subrc <> 0.
-      RAISE EXCEPTION NEW zcx_ayaml_error( iv_msg = `Unexpected date format` ).
+      RAISE EXCEPTION TYPE zcx_ayaml_error
+        EXPORTING iv_msg = `Unexpected date format`.
     ENDIF.
     CONCATENATE lv_y lv_m lv_d INTO rv_date.
   ENDMETHOD.
@@ -433,18 +473,20 @@ CLASS zcl_ayaml_utils IMPLEMENTATION.
     DATA lv_offset       TYPE string.
     DATA lv_date         TYPE d.
     DATA lv_time         TYPE t.
-    DATA lv_seconds_conv TYPE i.
     DATA lv_timestamp    TYPE timestamp.
-    DATA lv_sign         TYPE c LENGTH 1.
-    DATA lv_off_h        TYPE c LENGTH 2.
-    DATA lv_off_m        TYPE c LENGTH 2.
+    DATA lv_sign         TYPE string.
+    DATA lv_off_h        TYPE string.
+    DATA lv_off_m        TYPE string.
+    DATA lv_seconds_conv TYPE i.
+    DATA lv_h_i          TYPE i.
+    DATA lv_m_i          TYPE i.
 
     IF iv_value IS INITIAL.
       CLEAR rv_timestamp.
       RETURN.
     ENDIF.
 
-    FIND FIRST OCCURRENCE OF PCRE lc_regex_ts_utc IN iv_value
+    FIND FIRST OCCURRENCE OF REGEX lc_regex_ts_utc IN iv_value
          SUBMATCHES lv_y lv_m lv_d lv_h lv_min lv_s lv_frac.
     IF sy-subrc = 0.
       CONCATENATE lv_y lv_m lv_d INTO lv_date.
@@ -452,13 +494,13 @@ CLASS zcl_ayaml_utils IMPLEMENTATION.
       CONVERT DATE lv_date TIME lv_time INTO TIME STAMP lv_timestamp TIME ZONE lc_utc.
       IF lv_frac IS NOT INITIAL.
         lv_frac = |0{ lv_frac }|.
-        lv_timestamp += lv_frac.
+        lv_timestamp = lv_timestamp + lv_frac.
       ENDIF.
       rv_timestamp = lv_timestamp.
       RETURN.
     ENDIF.
 
-    FIND FIRST OCCURRENCE OF PCRE lc_regex_ts_offset IN iv_value
+    FIND FIRST OCCURRENCE OF REGEX lc_regex_ts_offset IN iv_value
          SUBMATCHES lv_y lv_m lv_d lv_h lv_min lv_s lv_frac lv_offset.
     IF sy-subrc = 0.
       CONCATENATE lv_y lv_m lv_d INTO lv_date.
@@ -466,45 +508,62 @@ CLASS zcl_ayaml_utils IMPLEMENTATION.
       CONVERT DATE lv_date TIME lv_time INTO TIME STAMP lv_timestamp TIME ZONE lc_utc.
       IF lv_frac IS NOT INITIAL.
         lv_frac = |0{ lv_frac }|.
-        lv_timestamp += lv_frac.
+        lv_timestamp = lv_timestamp + lv_frac.
       ENDIF.
 
-      lv_sign = substring( val = lv_offset off = 0 len = 1 ).
-      lv_off_h = substring( val = lv_offset off = 1 len = 2 ).
-      lv_off_m = substring( val = lv_offset off = 4 len = 2 ).
-      lv_seconds_conv = ( CONV i( lv_off_h ) * 3600 ) + ( CONV i( lv_off_m ) * 60 ).
+      lv_sign = substring( val = lv_offset
+                           off = 0
+                           len = 1 ).
+      lv_off_h = substring( val = lv_offset
+                            off = 1
+                            len = 2 ).
+      lv_off_m = substring( val = lv_offset
+                            off = 4
+                            len = 2 ).
+      lv_h_i = lv_off_h.
+      lv_m_i = lv_off_m.
+      lv_seconds_conv = ( lv_h_i * 3600 ) + ( lv_m_i * 60 ).
       TRY.
           CASE lv_sign.
             WHEN '-'.
-              lv_timestamp = cl_abap_tstmp=>add( tstmp = lv_timestamp secs = lv_seconds_conv ).
+              lv_timestamp = cl_abap_tstmp=>add( tstmp = lv_timestamp
+                                                 secs  = lv_seconds_conv ).
             WHEN '+'.
-              lv_timestamp = cl_abap_tstmp=>subtractsecs( tstmp = lv_timestamp secs = lv_seconds_conv ).
+              lv_timestamp = cl_abap_tstmp=>subtractsecs( tstmp = lv_timestamp
+                                                          secs  = lv_seconds_conv ).
           ENDCASE.
-        CATCH cx_parameter_invalid_range cx_parameter_invalid_type.
-          RAISE EXCEPTION NEW zcx_ayaml_error( iv_msg = `Unexpected timestamp format` ).
+        CATCH cx_parameter_invalid_range
+              cx_parameter_invalid_type.
+          RAISE EXCEPTION TYPE zcx_ayaml_error
+            EXPORTING iv_msg = `Unexpected timestamp format`.
       ENDTRY.
       rv_timestamp = lv_timestamp.
       RETURN.
     ENDIF.
 
-    RAISE EXCEPTION NEW zcx_ayaml_error( iv_msg = `Unexpected timestamp format` ).
+    RAISE EXCEPTION TYPE zcx_ayaml_error
+      EXPORTING iv_msg = `Unexpected timestamp format`.
   ENDMETHOD.
 
   METHOD detect_yaml_scalar.
     DATA lv_tmp   TYPE string.
     DATA lv_lower TYPE string.
+    DATA lv_first TYPE string.
+    DATA lv_last  TYPE string.
     DATA lv_len   TYPE i.
     DATA lv_off   TYPE i.
-    DATA lv_first TYPE c LENGTH 1.
-    DATA lv_last  TYPE c LENGTH 1.
 
     lv_tmp = iv_raw.
     lv_lower = to_lower( iv_raw ).
-    IF strlen( lv_tmp) >= 2.
-      lv_first = substring( val = lv_tmp off = 0 len = 1 ).
+    IF strlen( lv_tmp ) >= 2.
+      lv_first = substring( val = lv_tmp
+                            off = 0
+                            len = 1 ).
       lv_len = strlen( lv_tmp ).
       lv_off = lv_len - 1.
-      lv_last = substring( val = lv_tmp off = lv_off len = 1 ).
+      lv_last = substring( val = lv_tmp
+                           off = lv_off
+                           len = 1 ).
       IF lv_first = `"` AND lv_last = `"`.
         ev_type = zif_ayaml_types=>cs_type-string.
         ev_value = strip_quotes( lv_tmp ).
@@ -517,80 +576,98 @@ CLASS zcl_ayaml_utils IMPLEMENTATION.
         RETURN.
       ENDIF.
     ENDIF.
+
     IF lv_lower = `null` OR lv_lower = `~`.
       ev_type = zif_ayaml_types=>cs_type-null.
       ev_value = `null`.
       RETURN.
     ENDIF.
+
     IF lv_lower = `true` OR lv_lower = `false`.
       ev_type = zif_ayaml_types=>cs_type-boolean.
       ev_value = lv_lower.
       RETURN.
     ENDIF.
-    FIND FIRST OCCURRENCE OF PCRE '^\d{4}-\d{2}-\d{2}$' IN lv_tmp.
+
+    FIND FIRST OCCURRENCE OF REGEX '^\d{4}-\d{2}-\d{2}$' IN lv_tmp.
     IF sy-subrc = 0.
       ev_type = zif_ayaml_types=>cs_type-date.
       ev_value = lv_tmp.
       RETURN.
     ENDIF.
-    FIND FIRST OCCURRENCE OF PCRE '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z?$' IN lv_tmp.
+
+    FIND FIRST OCCURRENCE OF REGEX '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z?$' IN lv_tmp.
     IF sy-subrc = 0.
       ev_type = zif_ayaml_types=>cs_type-string.
       ev_value = lv_tmp.
       RETURN.
     ENDIF.
-    TRY.
-        DATA(lv_num) = CONV f( lv_tmp ) ##NEEDED.
-        IF lv_tmp CO `0123456789.-+eE`.
-          ev_type = zif_ayaml_types=>cs_type-number.
-          ev_value = lv_tmp.
-          RETURN.
-        ENDIF.
-      CATCH cx_root.
-    ENDTRY.
+
+    IF lv_tmp CO `0123456789.-+eE`.
+      ev_type = zif_ayaml_types=>cs_type-number.
+      ev_value = lv_tmp.
+      RETURN.
+    ENDIF.
+
     ev_type = zif_ayaml_types=>cs_type-string.
     ev_value = lv_tmp.
   ENDMETHOD.
 
   METHOD to_camel_case.
-    DATA lt_parts TYPE string_table.
-    DATA lv_part  TYPE string.
-    DATA lv_first TYPE abap_bool.
-    DATA lv_len   TYPE i.
+    DATA lt_parts      TYPE string_table.
+    DATA lv_first      TYPE abap_bool.
+    DATA lv_head       TYPE string.
+    DATA lv_tail       TYPE string.
+    DATA lv_len        TYPE i.
+    DATA lv_first_char TYPE string.
+    DATA lv_upper      TYPE string.
+    DATA lv_sub        TYPE string.
+    FIELD-SYMBOLS <fs_part> TYPE string.
 
     IF iv_name CS `_`.
       SPLIT iv_name AT `_` INTO TABLE lt_parts.
       lv_first = abap_true.
-      LOOP AT lt_parts INTO lv_part.
-        IF lv_part IS INITIAL.
+      LOOP AT lt_parts ASSIGNING <fs_part>.
+        IF <fs_part> IS INITIAL.
           CONTINUE.
         ENDIF.
         IF lv_first = abap_true.
-          rv_name = to_lower( lv_part ).
+          rv_name = to_lower( <fs_part> ).
           lv_first = abap_false.
         ELSE.
-          DATA(lv_head) = to_upper( substring( val = lv_part off = 0 len = 1 ) ).
-          DATA(lv_tail) = to_lower( substring( val = lv_part off = 1 ) ).
+          lv_sub = substring( val = <fs_part>
+                              off = 0
+                              len = 1 ).
+          lv_head = to_upper( lv_sub ).
+          lv_tail = to_lower( substring( val = <fs_part>
+                                         off = 1 ) ).
           rv_name = |{ rv_name }{ lv_head }{ lv_tail }|.
         ENDIF.
       ENDLOOP.
     ELSE.
       lv_len = strlen( iv_name ).
       IF lv_len > 0.
-        IF iv_name = to_upper( iv_name ).
+        lv_upper = to_upper( iv_name ).
+        IF iv_name = lv_upper.
           rv_name = to_lower( iv_name ).
         ELSE.
-          DATA(lv_first_char) = to_lower( substring( val = iv_name off = 0 len = 1 ) ).
-          rv_name = |{ lv_first_char }{ substring( val = iv_name off = 1 ) }|.
+          lv_sub = substring( val = iv_name
+                              off = 0
+                              len = 1 ).
+          lv_first_char = to_lower( lv_sub ).
+          lv_tail = substring( val = iv_name
+                               off = 1 ).
+          rv_name = |{ lv_first_char }{ lv_tail }|.
         ENDIF.
       ENDIF.
     ENDIF.
   ENDMETHOD.
 
   METHOD to_snake_case.
-    DATA lv_len  TYPE i.
-    DATA lv_idx  TYPE i.
-    DATA lv_char TYPE string.
+    DATA lv_len   TYPE i.
+    DATA lv_idx   TYPE i.
+    DATA lv_char  TYPE string.
+    DATA lv_upper TYPE string.
 
     IF iv_name CS `_`.
       rv_name = to_lower( iv_name ).
@@ -602,14 +679,17 @@ CLASS zcl_ayaml_utils IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    IF iv_name = to_upper( iv_name ).
+    lv_upper = to_upper( iv_name ).
+    IF iv_name = lv_upper.
       rv_name = to_lower( iv_name ).
       RETURN.
     ENDIF.
 
     DO lv_len TIMES.
       lv_idx = sy-index - 1.
-      lv_char = substring( val = iv_name off = lv_idx len = 1 ).
+      lv_char = substring( val = iv_name
+                           off = lv_idx
+                           len = 1 ).
       IF lv_char >= `A` AND lv_char <= `Z`.
         IF lv_idx > 0.
           rv_name = |{ rv_name }_{ to_lower( lv_char ) }|.
@@ -636,5 +716,4 @@ CLASS zcl_ayaml_utils IMPLEMENTATION.
         rv_name = to_lower( iv_name ).
     ENDCASE.
   ENDMETHOD.
-
 ENDCLASS.

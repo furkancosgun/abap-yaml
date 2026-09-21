@@ -23,11 +23,12 @@ INTERFACE zif_ayaml_types PUBLIC.
       order TYPE i,
     END OF ty_s_node.
 
-  TYPES ty_t_nodes TYPE SORTED TABLE OF ty_s_node WITH UNIQUE KEY path name
-                 WITH NON-UNIQUE SORTED KEY path_key COMPONENTS path.
-  TYPES ty_t_string TYPE STANDARD TABLE OF string WITH EMPTY KEY.
+  TYPES ty_t_nodes      TYPE SORTED TABLE OF ty_s_node WITH UNIQUE KEY path name
+                   WITH NON-UNIQUE SORTED KEY path_key COMPONENTS path.
+  TYPES ty_t_nodes_flat TYPE STANDARD TABLE OF ty_s_node WITH DEFAULT KEY.
+  TYPES ty_t_string     TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
 
-  TYPES ty_token_type TYPE string.
+  TYPES ty_token_type   TYPE string.
 
   CONSTANTS:
     BEGIN OF cs_token_type,
@@ -60,9 +61,9 @@ INTERFACE zif_ayaml_types PUBLIC.
       indent_num TYPE i,
     END OF ty_s_token.
 
-  TYPES ty_t_tokens TYPE STANDARD TABLE OF ty_s_token WITH EMPTY KEY.
+  TYPES ty_t_tokens TYPE STANDARD TABLE OF ty_s_token WITH DEFAULT KEY.
 
-  TYPES ty_format TYPE string.
+  TYPES ty_format   TYPE string.
 
   CONSTANTS:
     BEGIN OF cs_format,

@@ -1,45 +1,152 @@
 INTERFACE zif_ayaml PUBLIC.
 
-  INTERFACES zif_ayaml_reader.
-  INTERFACES zif_ayaml_writer.
+  METHODS is_empty
+    RETURNING VALUE(rv_yes) TYPE abap_bool.
 
-  ALIASES is_empty FOR zif_ayaml_reader~is_empty.
-  ALIASES exists FOR zif_ayaml_reader~exists.
-  ALIASES get FOR zif_ayaml_reader~get.
-  ALIASES get_string FOR zif_ayaml_reader~get_string.
-  ALIASES get_integer FOR zif_ayaml_reader~get_integer.
-  ALIASES get_number FOR zif_ayaml_reader~get_number.
-  ALIASES get_boolean FOR zif_ayaml_reader~get_boolean.
-  ALIASES get_date FOR zif_ayaml_reader~get_date.
-  ALIASES get_timestamp FOR zif_ayaml_reader~get_timestamp.
-  ALIASES get_node FOR zif_ayaml_reader~get_node.
-  ALIASES get_node_type FOR zif_ayaml_reader~get_node_type.
-  ALIASES get_keys FOR zif_ayaml_reader~get_keys.
-  ALIASES members FOR zif_ayaml_reader~get_keys.
-  ALIASES array_length FOR zif_ayaml_reader~array_length.
-  ALIASES get_string_table FOR zif_ayaml_reader~get_string_table.
-  ALIASES to_abap FOR zif_ayaml_reader~to_abap.
-  ALIASES to_yaml FOR zif_ayaml_reader~to_yaml.
-  ALIASES stringify FOR zif_ayaml_reader~to_yaml.
-  ALIASES slice FOR zif_ayaml_reader~slice.
+  METHODS exists
+    IMPORTING iv_path       TYPE string
+    RETURNING VALUE(rv_yes) TYPE abap_bool.
 
-  ALIASES set FOR zif_ayaml_writer~set.
-  ALIASES set_boolean FOR zif_ayaml_writer~set_boolean.
-  ALIASES set_string FOR zif_ayaml_writer~set_string.
-  ALIASES set_integer FOR zif_ayaml_writer~set_integer.
-  ALIASES set_number FOR zif_ayaml_writer~set_number.
-  ALIASES set_date FOR zif_ayaml_writer~set_date.
-  ALIASES set_timestamp FOR zif_ayaml_writer~set_timestamp.
-  ALIASES set_null FOR zif_ayaml_writer~set_null.
-  ALIASES delete FOR zif_ayaml_writer~delete.
-  ALIASES clear FOR zif_ayaml_writer~clear.
-  ALIASES ensure_sequence FOR zif_ayaml_writer~ensure_sequence.
-  ALIASES touch_array FOR zif_ayaml_writer~ensure_sequence.
-  ALIASES append_to_sequence FOR zif_ayaml_writer~append_to_sequence.
-  ALIASES push FOR zif_ayaml_writer~append_to_sequence.
+  METHODS get
+    IMPORTING iv_path          TYPE string
+              iv_default       TYPE string OPTIONAL
+    RETURNING VALUE(rv_result) TYPE string.
+
+  METHODS get_string
+    IMPORTING iv_path          TYPE string
+              iv_default       TYPE string OPTIONAL
+    RETURNING VALUE(rv_result) TYPE string.
+
+  METHODS get_integer
+    IMPORTING iv_path          TYPE string
+              iv_default       TYPE i OPTIONAL
+    RETURNING VALUE(rv_result) TYPE i.
+
+  METHODS get_number
+    IMPORTING iv_path          TYPE string
+              iv_default       TYPE f OPTIONAL
+    RETURNING VALUE(rv_result) TYPE f.
+
+  METHODS get_boolean
+    IMPORTING iv_path          TYPE string
+              iv_default       TYPE abap_bool OPTIONAL
+    RETURNING VALUE(rv_result) TYPE abap_bool.
+
+  METHODS get_date
+    IMPORTING iv_path          TYPE string
+              iv_default       TYPE d OPTIONAL
+    RETURNING VALUE(rv_result) TYPE d.
+
+  METHODS get_timestamp
+    IMPORTING iv_path          TYPE string
+              iv_default       TYPE timestamp OPTIONAL
+    RETURNING VALUE(rv_result) TYPE timestamp.
+
+  METHODS get_node
+    IMPORTING iv_path        TYPE string
+    RETURNING VALUE(rs_node) TYPE zif_ayaml_types=>ty_s_node.
+
+  METHODS get_node_type
+    IMPORTING iv_path          TYPE string
+    RETURNING VALUE(rv_result) TYPE zif_ayaml_types=>ty_node_type.
+
+  METHODS members
+    IMPORTING iv_path        TYPE string DEFAULT '/'
+    RETURNING VALUE(rt_keys) TYPE zif_ayaml_types=>ty_t_string.
+
+  METHODS array_length
+    IMPORTING iv_path          TYPE string
+    RETURNING VALUE(rv_length) TYPE i.
+
+  METHODS get_string_table
+    IMPORTING iv_path          TYPE string
+    RETURNING VALUE(rt_values) TYPE string_table.
+
+  METHODS to_abap
+    EXPORTING ev_data TYPE any
+    RAISING   zcx_ayaml_error.
+
+  METHODS to_yaml
+    IMPORTING iv_indent      TYPE i DEFAULT 0
+    RETURNING VALUE(rv_yaml) TYPE string
+    RAISING   zcx_ayaml_error.
+
+  METHODS slice
+    IMPORTING iv_path            TYPE string
+    RETURNING VALUE(ro_instance) TYPE REF TO zif_ayaml
+    RAISING   zcx_ayaml_error.
+
+  METHODS set
+    IMPORTING iv_path            TYPE string
+              iv_value           TYPE any
+              iv_node_type       TYPE zif_ayaml_types=>ty_node_type OPTIONAL
+              iv_ignore_empty    TYPE abap_bool                     DEFAULT abap_true
+    RETURNING VALUE(ro_instance) TYPE REF TO zif_ayaml
+    RAISING   zcx_ayaml_error.
+
+  METHODS set_boolean
+    IMPORTING iv_path            TYPE string
+              iv_value           TYPE any
+    RETURNING VALUE(ro_instance) TYPE REF TO zif_ayaml
+    RAISING   zcx_ayaml_error.
+
+  METHODS set_string
+    IMPORTING iv_path            TYPE string
+              iv_value           TYPE clike
+    RETURNING VALUE(ro_instance) TYPE REF TO zif_ayaml
+    RAISING   zcx_ayaml_error.
+
+  METHODS set_integer
+    IMPORTING iv_path            TYPE string
+              iv_value           TYPE i
+    RETURNING VALUE(ro_instance) TYPE REF TO zif_ayaml
+    RAISING   zcx_ayaml_error.
+
+  METHODS set_number
+    IMPORTING iv_path            TYPE string
+              iv_value           TYPE f
+    RETURNING VALUE(ro_instance) TYPE REF TO zif_ayaml
+    RAISING   zcx_ayaml_error.
+
+  METHODS set_date
+    IMPORTING iv_path            TYPE string
+              iv_value           TYPE d
+    RETURNING VALUE(ro_instance) TYPE REF TO zif_ayaml
+    RAISING   zcx_ayaml_error.
+
+  METHODS set_timestamp
+    IMPORTING iv_path            TYPE string
+              iv_value           TYPE timestamp
+    RETURNING VALUE(ro_instance) TYPE REF TO zif_ayaml
+    RAISING   zcx_ayaml_error.
+
+  METHODS set_null
+    IMPORTING iv_path            TYPE string
+    RETURNING VALUE(ro_instance) TYPE REF TO zif_ayaml
+    RAISING   zcx_ayaml_error.
+
+  METHODS delete
+    IMPORTING iv_path            TYPE string
+    RETURNING VALUE(ro_instance) TYPE REF TO zif_ayaml.
+
+  METHODS clear
+    RETURNING VALUE(ro_instance) TYPE REF TO zif_ayaml
+    RAISING   zcx_ayaml_error.
+
+  METHODS touch_array
+    IMPORTING iv_path            TYPE string
+              iv_clear           TYPE abap_bool DEFAULT abap_false
+    RETURNING VALUE(ro_instance) TYPE REF TO zif_ayaml
+    RAISING   zcx_ayaml_error.
+
+  METHODS push
+    IMPORTING iv_path            TYPE string
+              iv_value           TYPE any
+    RETURNING VALUE(ro_instance) TYPE REF TO zif_ayaml
+    RAISING   zcx_ayaml_error.
 
   METHODS clone
-    RETURNING VALUE(ri_ayaml) TYPE REF TO zif_ayaml
+    RETURNING VALUE(ro_instance) TYPE REF TO zif_ayaml
     RAISING   zcx_ayaml_error.
 
 ENDINTERFACE.
