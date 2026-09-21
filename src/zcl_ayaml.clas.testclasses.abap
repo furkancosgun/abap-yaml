@@ -121,61 +121,71 @@ CLASS ltcl_ayaml_master_suite IMPLEMENTATION.
     mo_cut->set( iv_ignore_empty = abap_false
                  iv_path         = '/keep_num'
                  iv_val          = 0 ).
-
     cl_abap_unit_assert=>assert_true( mo_cut->exists( '/keep_bool' ) ).
+    cl_abap_unit_assert=>assert_true( mo_cut->exists( '/keep_num' ) ).
     cl_abap_unit_assert=>assert_false( mo_cut->get_boolean( '/keep_bool' ) ).
     cl_abap_unit_assert=>assert_equals( exp = 0
                                         act = mo_cut->get_integer( '/keep_num' ) ).
   ENDMETHOD.
 
   METHOD test_escaping.
-    DATA lv_yaml  TYPE string.
-    DATA lv_input TYPE string.
+    DATA lv_input  TYPE string.
+    DATA lv_yaml   TYPE string.
+    DATA lv_output TYPE string.
 
     lv_input = |escaping"\\|.
-    mo_cut->set( iv_path = '/payload/str'
+    mo_cut->set( iv_path = '/esc'
                  iv_val  = lv_input ).
-    lv_yaml = mo_cut->stringify( ).
 
+    lv_yaml = mo_cut->stringify( ).
     cl_abap_unit_assert=>assert_char_cp( exp = '*escaping\"\\*'
                                          act = lv_yaml ).
+
+    DATA(li_parsed) = zcl_ayaml=>parse( lv_yaml ).
+    lv_output = li_parsed->get( '/esc' ).
+    cl_abap_unit_assert=>assert_equals( exp = lv_input
+                                        act = lv_output ).
   ENDMETHOD.
 
   METHOD test_explicit_type_override.
-    DATA ls_node TYPE zif_ayaml_types=>ty_s_node.
-
-    mo_cut->set( iv_path      = '/val'
-                 iv_val       = '0'
-                 iv_node_type = zif_ayaml_types=>cs_type-number ).
-
-    ls_node = mo_cut->get_node( '/val' ).
-    cl_abap_unit_assert=>assert_equals( exp = zif_ayaml_types=>cs_type-number
-                                        act = ls_node-type ).
-    cl_abap_unit_assert=>assert_equals( exp = '0'
-                                        act = ls_node-value ).
+    mo_cut->set( iv_node_type = zif_ayaml_types=>cs_type-string
+                 iv_path      = '/str_num'
+                 iv_val       = '123' ).
+    cl_abap_unit_assert=>assert_equals( exp = zif_ayaml_types=>cs_type-string
+                                        act = mo_cut->get_node_type( '/str_num' ) ).
   ENDMETHOD.
 
   METHOD test_new_features.
-    DATA lv_yaml  TYPE string.
-    DATA li_clone TYPE REF TO zif_ayaml.
-    DATA lv_num   TYPE f.
-    DATA lv_f     TYPE f VALUE '3.14'.
+    DATA lv_date TYPE d VALUE '20240101'.
+    DATA lv_yaml TYPE string.
 
-    mo_cut->set( iv_path = '/num'
-                 iv_val  = lv_f ).
+    mo_cut->set_boolean( iv_path = '/b'
+                         iv_val  = abap_true ).
+    mo_cut->set_string( iv_path = '/s'
+                        iv_val  = 'hello' ).
+    mo_cut->set_integer( iv_path = '/i'
+                         iv_val  = 42 ).
+    mo_cut->set_number( iv_path = '/f'
+                        iv_val  = '3.14' ).
+    mo_cut->set_date( iv_path = '/d'
+                      iv_val  = lv_date ).
+    mo_cut->set_null( '/n' ).
 
-    lv_num = mo_cut->get_number( '/num' ).
-    cl_abap_unit_assert=>assert_equals( exp = CONV f( '3.14' )
-                                        act = lv_num ).
-
-    cl_abap_unit_assert=>assert_equals( exp = zif_ayaml_types=>cs_type-number
-                                        act = mo_cut->get_node_type( '/num' ) ).
+    cl_abap_unit_assert=>assert_true( mo_cut->get_boolean( '/b' ) ).
+    cl_abap_unit_assert=>assert_equals( exp = 'hello'
+                                        act = mo_cut->get_string( '/s' ) ).
+    cl_abap_unit_assert=>assert_equals( exp = 42
+                                        act = mo_cut->get_integer( '/i' ) ).
+    cl_abap_unit_assert=>assert_equals( exp = '20240101'
+                                        act = mo_cut->get_date( '/d' ) ).
+    cl_abap_unit_assert=>assert_equals( exp = zif_ayaml_types=>cs_type-null
+                                        act = mo_cut->get_node_type( '/n' ) ).
 
     mo_cut->touch_array( '/arr' ).
     mo_cut->push( iv_path = '/arr'
                   iv_val  = 'abc' ).
     mo_cut->push( iv_path = '/arr'
-                  iv_val  = 'def' ).
+                  iv_val  = 123 ).
 
     lv_yaml = mo_cut->stringify( ).
     cl_abap_unit_assert=>assert_char_cp( exp = '*arr:*'
@@ -183,20 +193,17 @@ CLASS ltcl_ayaml_master_suite IMPLEMENTATION.
     cl_abap_unit_assert=>assert_char_cp( exp = '*- abc*'
                                          act = lv_yaml ).
 
-    li_clone = mo_cut->clone( ).
-    cl_abap_unit_assert=>assert_true( li_clone->exists( '/arr' ) ).
+    DATA(li_parsed) = zcl_ayaml=>parse( lv_yaml ).
+    cl_abap_unit_assert=>assert_equals( exp = 'abc'
+                                        act = li_parsed->get( '/arr/1' ) ).
+    cl_abap_unit_assert=>assert_equals( exp = 123
+                                        act = li_parsed->get_integer( '/arr/2' ) ).
 
     mo_cut->clear( ).
     cl_abap_unit_assert=>assert_true( mo_cut->is_empty( ) ).
 
-    mo_cut->set_boolean( iv_path = '/b1'
-                         iv_val  = abap_true ).
-    mo_cut->set_boolean( iv_path = '/b2'
-                         iv_val  = abap_false ).
-    cl_abap_unit_assert=>assert_true( mo_cut->get_boolean( '/b1' ) ).
-    cl_abap_unit_assert=>assert_false( mo_cut->get_boolean( '/b2' ) ).
-
-    mo_cut->set_null( '/n' ).
+    lv_yaml = |n: null\n|.
+    mo_cut = zcl_ayaml=>parse( lv_yaml ).
     cl_abap_unit_assert=>assert_equals( exp = 'null'
                                         act = mo_cut->get( '/n' ) ).
   ENDMETHOD.
@@ -316,30 +323,30 @@ CLASS ltcl_ayaml_extended IMPLEMENTATION.
     DATA lv_built     TYPE string.
     DATA lv_seq_check TYPE abap_bool.
 
-    lv_norm = zcl_ayaml_path_utils=>normalize( 'a/b/' ).
+    lv_norm = zcl_ayaml_utils=>normalize_path( 'a/b/' ).
     cl_abap_unit_assert=>assert_equals( exp = '/a/b'
                                         act = lv_norm ).
-    lv_norm = zcl_ayaml_path_utils=>normalize( '' ).
+    lv_norm = zcl_ayaml_utils=>normalize_path( '' ).
     cl_abap_unit_assert=>assert_equals( exp = '/'
                                         act = lv_norm ).
-    zcl_ayaml_path_utils=>split( EXPORTING iv_path = '/a/b/c'
+    zcl_ayaml_utils=>split_path( EXPORTING iv_path = '/a/b/c'
                                  IMPORTING ev_path = lv_parent
                                            ev_name = lv_name ).
     cl_abap_unit_assert=>assert_equals( exp = '/a/b/'
                                         act = lv_parent ).
     cl_abap_unit_assert=>assert_equals( exp = 'c'
                                         act = lv_name ).
-    zcl_ayaml_path_utils=>split( EXPORTING iv_path = '/'
+    zcl_ayaml_utils=>split_path( EXPORTING iv_path = '/'
                                  IMPORTING ev_path = lv_parent
                                            ev_name = lv_name ).
     cl_abap_unit_assert=>assert_equals( exp = '/'
                                         act = lv_parent ).
-    lv_built = zcl_ayaml_path_utils=>build_path( iv_parent = '/a'
-                                                 iv_name   = 'b' ).
+    lv_built = zcl_ayaml_utils=>build_path( iv_parent = '/a'
+                                            iv_name   = 'b' ).
     cl_abap_unit_assert=>assert_equals( exp = '/a/b'
                                         act = lv_built ).
-    lv_built = zcl_ayaml_path_utils=>build_path( iv_parent = '/'
-                                                 iv_name   = 'root' ).
+    lv_built = zcl_ayaml_utils=>build_path( iv_parent = '/'
+                                            iv_name   = 'root' ).
     cl_abap_unit_assert=>assert_equals( exp = '/root'
                                         act = lv_built ).
     mo_cut->touch_array( '/myseq' ).
@@ -353,8 +360,8 @@ CLASS ltcl_ayaml_extended IMPLEMENTATION.
       CATCH zcx_ayaml_error.
         cl_abap_unit_assert=>fail( 'push on sequence failed' ).
     ENDTRY.
-    lv_seq_check = zcl_ayaml_path_utils=>is_sequence_path( it_nodes = VALUE #( )
-                                                           iv_path  = '/' ).
+    lv_seq_check = zcl_ayaml_utils=>is_sequence_path( it_nodes = VALUE #( )
+                                                      iv_path  = '/' ).
     cl_abap_unit_assert=>assert_false( lv_seq_check ).
   ENDMETHOD.
 
@@ -363,26 +370,26 @@ CLASS ltcl_ayaml_extended IMPLEMENTATION.
     DATA lv_unesc    TYPE string.
     DATA lv_stripped TYPE string.
 
-    lv_esc = zcl_ayaml_string_utils=>escape_text( |a"b| ).
+    lv_esc = zcl_ayaml_utils=>escape_text( |a"b| ).
     cl_abap_unit_assert=>assert_char_cp( exp = '*\"*'
                                          act = lv_esc ).
-    lv_esc = zcl_ayaml_string_utils=>escape_text( 'a\b' ).
+    lv_esc = zcl_ayaml_utils=>escape_text( 'a\b' ).
     cl_abap_unit_assert=>assert_char_cp( exp = '*\\*'
                                          act = lv_esc ).
-    lv_esc = zcl_ayaml_string_utils=>escape_text( 'a"b\c' ).
-    lv_unesc = zcl_ayaml_string_utils=>unescape( lv_esc ).
+    lv_esc = zcl_ayaml_utils=>escape_text( 'a"b\c' ).
+    lv_unesc = zcl_ayaml_utils=>unescape_text( lv_esc ).
     cl_abap_unit_assert=>assert_equals( exp = 'a"b\c'
                                         act = lv_unesc ).
-    lv_stripped = zcl_ayaml_string_utils=>strip_quotes( |"hello"| ).
+    lv_stripped = zcl_ayaml_utils=>strip_quotes( |"hello"| ).
     cl_abap_unit_assert=>assert_equals( exp = 'hello'
                                         act = lv_stripped ).
-    lv_stripped = zcl_ayaml_string_utils=>strip_quotes( |'it''s'| ).
+    lv_stripped = zcl_ayaml_utils=>strip_quotes( |'it''s'| ).
     cl_abap_unit_assert=>assert_equals( exp = |it's|
                                         act = lv_stripped ).
-    cl_abap_unit_assert=>assert_true( zcl_ayaml_string_utils=>is_plain( |simple| ) ).
-    cl_abap_unit_assert=>assert_false( zcl_ayaml_string_utils=>is_plain( |a:b| ) ).
-    cl_abap_unit_assert=>assert_false( zcl_ayaml_string_utils=>is_plain( | true | ) ).
-    cl_abap_unit_assert=>assert_false( zcl_ayaml_string_utils=>is_plain( |null| ) ).
+    cl_abap_unit_assert=>assert_true( zcl_ayaml_utils=>is_plain_scalar( |simple| ) ).
+    cl_abap_unit_assert=>assert_false( zcl_ayaml_utils=>is_plain_scalar( |a:b| ) ).
+    cl_abap_unit_assert=>assert_false( zcl_ayaml_utils=>is_plain_scalar( | true | ) ).
+    cl_abap_unit_assert=>assert_false( zcl_ayaml_utils=>is_plain_scalar( |null| ) ).
   ENDMETHOD.
 
   METHOD test_type_utils_date_time.
@@ -391,33 +398,31 @@ CLASS ltcl_ayaml_extended IMPLEMENTATION.
     DATA lv_back    TYPE d.
     DATA lv_ts      TYPE timestamp.
     DATA lv_ts_str  TYPE string.
-    " TODO: variable is assigned but never used (ABAP cleaner)
     DATA lv_ts_back TYPE timestamp.
     DATA lv_type    TYPE zif_ayaml_types=>ty_node_type.
 
-    lv_str = zcl_ayaml_type_utils=>format_date( lv_date ).
+    lv_str = zcl_ayaml_utils=>format_date( lv_date ).
     cl_abap_unit_assert=>assert_equals( exp = '2024-01-15'
                                         act = lv_str ).
-    lv_back = zcl_ayaml_type_utils=>parse_date( '2024-01-15' ).
+    lv_back = zcl_ayaml_utils=>parse_date( '2024-01-15' ).
     cl_abap_unit_assert=>assert_equals( exp = lv_date
                                         act = lv_back ).
-    lv_back = zcl_ayaml_type_utils=>parse_date( '' ).
+    lv_back = zcl_ayaml_utils=>parse_date( '' ).
     cl_abap_unit_assert=>assert_true( xsdbool( lv_back IS INITIAL ) ).
     GET TIME STAMP FIELD lv_ts.
-    lv_ts_str = zcl_ayaml_type_utils=>format_timestamp( lv_ts ).
+    lv_ts_str = zcl_ayaml_utils=>format_timestamp( lv_ts ).
     cl_abap_unit_assert=>assert_char_cp( exp = '*T*:*:*Z*'
                                          act = lv_ts_str ).
-    lv_ts_back = zcl_ayaml_type_utils=>parse_timestamp( lv_ts_str ).
-    cl_abap_unit_assert=>assert_char_cp( exp = '*202*'
-                                         act = lv_ts_str ).
+    lv_ts_back = zcl_ayaml_utils=>parse_timestamp( lv_ts_str ).
+    cl_abap_unit_assert=>assert_true( xsdbool( lv_ts_back IS NOT INITIAL ) ).
 
-    lv_type = zcl_ayaml_type_utils=>detect_type( 123 ).
+    lv_type = zcl_ayaml_utils=>detect_type( 123 ).
     cl_abap_unit_assert=>assert_equals( exp = zif_ayaml_types=>cs_type-number
                                         act = lv_type ).
-    lv_type = zcl_ayaml_type_utils=>detect_type( 'abc' ).
+    lv_type = zcl_ayaml_utils=>detect_type( 'abc' ).
     cl_abap_unit_assert=>assert_equals( exp = zif_ayaml_types=>cs_type-string
                                         act = lv_type ).
-    lv_type = zcl_ayaml_type_utils=>detect_type( abap_true ).
+    lv_type = zcl_ayaml_utils=>detect_type( abap_true ).
     cl_abap_unit_assert=>assert_equals( exp = zif_ayaml_types=>cs_type-boolean
                                         act = lv_type ).
   ENDMETHOD.
@@ -435,40 +440,54 @@ CLASS ltcl_ayaml_extended IMPLEMENTATION.
                                         act = li_doc->get_integer( '/seq/3' ) ).
     cl_abap_unit_assert=>assert_equals( exp = 'hello'
                                         act = li_doc->get( '/plain' ) ).
-    lv_yaml = |mylist:\n  - first\n  - second\n  - 3|.
-    li_doc = zcl_ayaml=>parse( lv_yaml ).
-    cl_abap_unit_assert=>assert_equals( exp = 'first'
-                                        act = li_doc->get( '/mylist/1' ) ).
-    cl_abap_unit_assert=>assert_equals( exp = 'second'
-                                        act = li_doc->get( '/mylist/2' ) ).
   ENDMETHOD.
 
   METHOD test_parser_seq_mapping.
     DATA lv_yaml TYPE string.
 
-    lv_yaml = |items:\n  - name: alice\n  - name: bob|.
+    lv_yaml =
+      |items:\n| &&
+      |  - id: 1\n| &&
+      |    name: one\n| &&
+      |  - id: 2\n| &&
+      |    name: two\n|.
     DATA(li_doc) = zcl_ayaml=>parse( lv_yaml ).
-    cl_abap_unit_assert=>assert_equals( exp = 'alice'
+    cl_abap_unit_assert=>assert_equals( exp = 1
+                                        act = li_doc->get_integer( '/items/1/id' ) ).
+    cl_abap_unit_assert=>assert_equals( exp = 'one'
                                         act = li_doc->get( '/items/1/name' ) ).
-    cl_abap_unit_assert=>assert_equals( exp = 'bob'
+    cl_abap_unit_assert=>assert_equals( exp = 2
+                                        act = li_doc->get_integer( '/items/2/id' ) ).
+    cl_abap_unit_assert=>assert_equals( exp = 'two'
                                         act = li_doc->get( '/items/2/name' ) ).
-    lv_yaml = zcl_ayaml=>parse( |a: 1| )->stringify( ).
-    cl_abap_unit_assert=>assert_char_cp( exp = '*a: 1*'
-                                         act = lv_yaml ).
   ENDMETHOD.
 
   METHOD test_serializer_indent.
     DATA lv_yaml TYPE string.
 
+    mo_cut->set( iv_path = '/a'
+                 iv_val  = '1' ).
+    lv_yaml = mo_cut->stringify( iv_indent = 1 ).
+    cl_abap_unit_assert=>assert_char_cp( exp = '*a: 1*'
+                                         act = lv_yaml ).
+    lv_yaml = mo_cut->stringify( iv_indent = -1 ).
+    cl_abap_unit_assert=>assert_char_cp( exp = '*a: 1*'
+                                         act = lv_yaml ).
+    mo_cut->clear( ).
     mo_cut->set( iv_path = '/a/b'
-                 iv_val  = 'v' ).
-    lv_yaml = mo_cut->stringify( 1 ).
+                 iv_val  = 'x' ).
+    lv_yaml = mo_cut->stringify( ).
     cl_abap_unit_assert=>assert_char_cp( exp = '*a:*'
                                          act = lv_yaml ).
     mo_cut->clear( ).
+    mo_cut->touch_array( '/arr' ).
+    mo_cut->touch_array( '/arr/1' ).
+    mo_cut->push( iv_path = '/arr/1'
+                  iv_val  = 'nested' ).
     lv_yaml = mo_cut->stringify( ).
-    cl_abap_unit_assert=>assert_equals( exp = ''
-                                        act = lv_yaml ).
+    cl_abap_unit_assert=>assert_char_cp( exp = '*arr:*'
+                                         act = lv_yaml ).
+    mo_cut->clear( ).
     mo_cut->touch_array( '/arr' ).
     lv_yaml = mo_cut->stringify( ).
     cl_abap_unit_assert=>assert_char_cp( exp = '*arr: []*'
@@ -476,73 +495,72 @@ CLASS ltcl_ayaml_extended IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD test_ty_t_string_empty_key.
-    DATA lt_tab TYPE zif_ayaml_types=>ty_t_string.
-
-    INSERT `a` INTO TABLE lt_tab.
-    INSERT `a` INTO TABLE lt_tab.
-    INSERT `b` INTO TABLE lt_tab.
-    cl_abap_unit_assert=>assert_equals( exp = 3
-                                        act = lines( lt_tab ) ).
-    CLEAR lt_tab.
-    lt_tab = VALUE zif_ayaml_types=>ty_t_string( ( `x` ) ( `y` ) ( `x` ) ).
-    cl_abap_unit_assert=>assert_equals( exp = 3
-                                        act = lines( lt_tab ) ).
+    DATA lt_tbl TYPE zif_ayaml_types=>ty_t_string.
+    INSERT `item1` INTO TABLE lt_tbl.
+    INSERT `item2` INTO TABLE lt_tbl.
+    cl_abap_unit_assert=>assert_equals( exp = 2
+                                        act = lines( lt_tbl ) ).
   ENDMETHOD.
 
   METHOD test_getters_edge_cases.
-    mo_cut->set( iv_path = '/numstr'
-                 iv_val  = 'not_a_num' ).
+    mo_cut->set( iv_node_type = zif_ayaml_types=>cs_type-number
+                 iv_path      = '/bad_int'
+                 iv_val       = 'not_a_number' ).
     cl_abap_unit_assert=>assert_equals( exp = 0
-                                        act = mo_cut->get_integer( '/numstr' ) ).
+                                        act = mo_cut->get_integer( '/bad_int' ) ).
     cl_abap_unit_assert=>assert_equals( exp = 0
-                                        act = CONV i( mo_cut->get_number( '/numstr' ) ) ).
-    mo_cut->set( iv_path = '/bool1'
-                 iv_val  = 'X' ).
-    cl_abap_unit_assert=>assert_true( mo_cut->get_boolean( '/bool1' ) ).
-    cl_abap_unit_assert=>assert_false( mo_cut->get_boolean( '/nonexist' ) ).
+                                        act = mo_cut->get_integer( '/non_existent' ) ).
+    cl_abap_unit_assert=>assert_equals( exp = 0
+                                        act = mo_cut->get_number( '/bad_int' ) ).
+    cl_abap_unit_assert=>assert_equals( exp = 0
+                                        act = mo_cut->get_number( '/non_existent' ) ).
+    cl_abap_unit_assert=>assert_false( mo_cut->get_boolean( '/non_existent' ) ).
     cl_abap_unit_assert=>assert_equals( exp = ''
-                                        act = mo_cut->get( '/nonexist' ) ).
-    cl_abap_unit_assert=>assert_true( xsdbool( mo_cut->get_node( '/nonexist' ) IS INITIAL ) ).
-    mo_cut->set( iv_path = '/a/b/c'
-                 iv_val  = 'val' ).
-    cl_abap_unit_assert=>assert_true( mo_cut->exists( '/a/b/c/' ) ).
-    cl_abap_unit_assert=>assert_true( mo_cut->exists( 'a/b/c' ) ).
+                                        act = mo_cut->get_string( '/non_existent' ) ).
+    cl_abap_unit_assert=>assert_true( xsdbool( mo_cut->get_date( '/non_existent' ) IS INITIAL ) ).
+    cl_abap_unit_assert=>assert_true( xsdbool( mo_cut->get_timestamp( '/non_existent' ) IS INITIAL ) ).
+    mo_cut->set_null( '/my_null' ).
+    cl_abap_unit_assert=>assert_equals( exp = 0
+                                        act = mo_cut->get_integer( '/my_null' ) ).
+    cl_abap_unit_assert=>assert_equals( exp = 0
+                                        act = mo_cut->get_number( '/my_null' ) ).
+    cl_abap_unit_assert=>assert_false( mo_cut->get_boolean( '/my_null' ) ).
+    cl_abap_unit_assert=>assert_true( xsdbool( mo_cut->get_date( '/my_null' ) IS INITIAL ) ).
+    cl_abap_unit_assert=>assert_true( xsdbool( mo_cut->get_timestamp( '/my_null' ) IS INITIAL ) ).
+    cl_abap_unit_assert=>assert_equals( exp = ''
+                                        act = mo_cut->get_string( '/my_null' ) ).
   ENDMETHOD.
 
   METHOD test_set_recursive.
     TYPES: BEGIN OF ty_s_inner,
-             inner TYPE string,
+             field_a TYPE string,
+             field_b TYPE i,
            END OF ty_s_inner.
     TYPES: BEGIN OF ty_s_outer,
-             outer TYPE ty_s_inner,
-             num   TYPE i,
+             inner   TYPE ty_s_inner,
+             numbers TYPE STANDARD TABLE OF i WITH EMPTY KEY,
            END OF ty_s_outer.
-    DATA ls_outer TYPE ty_s_outer.
-    DATA lt_tab   TYPE zif_ayaml_types=>ty_t_string.
+    DATA ls_data TYPE ty_s_outer.
 
-    ls_outer-outer-inner = 'deep'.
-    ls_outer-num = 7.
-    mo_cut->set( iv_path = '/deep'
-                 iv_val  = ls_outer ).
-    cl_abap_unit_assert=>assert_equals( exp = 'deep'
-                                        act = mo_cut->get( '/deep/outer/inner' ) ).
-    cl_abap_unit_assert=>assert_equals( exp = 7
-                                        act = mo_cut->get_integer( '/deep/num' ) ).
-    lt_tab = VALUE zif_ayaml_types=>ty_t_string( ( `one` ) ( `two` ) ).
-    mo_cut->set( iv_path = '/mytab'
-                 iv_val  = lt_tab ).
-    cl_abap_unit_assert=>assert_equals( exp = 'one'
-                                        act = mo_cut->get( '/mytab/1' ) ).
-    cl_abap_unit_assert=>assert_equals( exp = 'two'
-                                        act = mo_cut->get( '/mytab/2' ) ).
+    ls_data-inner-field_a = 'nested_val'.
+    ls_data-inner-field_b = 99.
+    INSERT 10 INTO TABLE ls_data-numbers.
+    INSERT 20 INTO TABLE ls_data-numbers.
+    mo_cut->set( iv_path = '/config'
+                 iv_val  = ls_data ).
+    cl_abap_unit_assert=>assert_equals( exp = 'nested_val'
+                                        act = mo_cut->get( '/config/inner/field_a' ) ).
+    cl_abap_unit_assert=>assert_equals( exp = 99
+                                        act = mo_cut->get_integer( '/config/inner/field_b' ) ).
+    cl_abap_unit_assert=>assert_equals( exp = 10
+                                        act = mo_cut->get_integer( '/config/numbers/1' ) ).
+    cl_abap_unit_assert=>assert_equals( exp = 20
+                                        act = mo_cut->get_integer( '/config/numbers/2' ) ).
   ENDMETHOD.
 ENDCLASS.
 
 
-CLASS ltcl_ayaml_advanced_parser DEFINITION FINAL FOR TESTING
-  DURATION SHORT
-  RISK LEVEL HARMLESS.
-
+CLASS ltcl_ayaml_advanced_parser DEFINITION FINAL FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
   PRIVATE SECTION.
     METHODS test_odd_indentation FOR TESTING RAISING cx_static_check.
     METHODS test_multiline_block_scalars FOR TESTING RAISING cx_static_check.
@@ -550,7 +568,6 @@ CLASS ltcl_ayaml_advanced_parser DEFINITION FINAL FOR TESTING
     METHODS test_anchors_and_merge FOR TESTING RAISING cx_static_check.
     METHODS test_inline_comments FOR TESTING RAISING cx_static_check.
     METHODS test_strict_syntax_errors FOR TESTING RAISING cx_static_check.
-
 ENDCLASS.
 
 
@@ -644,15 +661,150 @@ CLASS ltcl_ayaml_advanced_parser IMPLEMENTATION.
         zcl_ayaml=>parse( `'unclosed string` ).
         cl_abap_unit_assert=>fail( 'Expected syntax error for unclosed single quote' ).
       CATCH zcx_ayaml_error.
-        " expected
     ENDTRY.
 
     TRY.
         zcl_ayaml=>parse( `key: *undefined_alias` ).
         cl_abap_unit_assert=>fail( 'Expected error for undefined alias' ).
       CATCH zcx_ayaml_error.
-        " expected
     ENDTRY.
+  ENDMETHOD.
+
+ENDCLASS.
+
+
+CLASS ltcl_ayaml_new_architecture DEFINITION FINAL FOR TESTING RISK LEVEL HARMLESS DURATION SHORT.
+  PRIVATE SECTION.
+    METHODS test_reader_interface FOR TESTING RAISING cx_static_check.
+    METHODS test_writer_interface FOR TESTING RAISING cx_static_check.
+    METHODS test_to_abap_deserializer FOR TESTING RAISING cx_static_check.
+    METHODS test_default_values FOR TESTING RAISING cx_static_check.
+    METHODS test_sequence_helpers FOR TESTING RAISING cx_static_check.
+ENDCLASS.
+
+
+CLASS ltcl_ayaml_new_architecture IMPLEMENTATION.
+
+  METHOD test_reader_interface.
+    DATA li_reader TYPE REF TO zif_ayaml_reader.
+    DATA(li_yaml) = zcl_ayaml=>parse( |title: Book\npages: 350\nactive: true| ).
+    li_reader = li_yaml.
+
+    cl_abap_unit_assert=>assert_false( li_reader->is_empty( ) ).
+    cl_abap_unit_assert=>assert_true( li_reader->exists( '/title' ) ).
+    cl_abap_unit_assert=>assert_equals( exp = 'Book' act = li_reader->get_string( '/title' ) ).
+    cl_abap_unit_assert=>assert_equals( exp = 350 act = li_reader->get_integer( '/pages' ) ).
+    cl_abap_unit_assert=>assert_true( li_reader->get_boolean( '/active' ) ).
+  ENDMETHOD.
+
+  METHOD test_writer_interface.
+    DATA li_writer TYPE REF TO zif_ayaml_writer.
+    DATA(li_yaml) = zcl_ayaml=>create_empty( ).
+    li_writer = li_yaml.
+
+    li_writer->set_string( iv_path = '/user/name' iv_val = 'Alice' ).
+    li_writer->ensure_sequence( '/user/roles' ).
+    li_writer->append_to_sequence( iv_path = '/user/roles' iv_val = 'admin' ).
+    li_writer->append_to_sequence( iv_path = '/user/roles' iv_val = 'editor' ).
+
+    cl_abap_unit_assert=>assert_equals( exp = 'Alice' act = li_yaml->get_string( '/user/name' ) ).
+    cl_abap_unit_assert=>assert_equals( exp = 2 act = li_yaml->array_length( '/user/roles' ) ).
+    cl_abap_unit_assert=>assert_equals( exp = 'admin' act = li_yaml->get_string( '/user/roles/1' ) ).
+  ENDMETHOD.
+
+  METHOD test_to_abap_deserializer.
+    TYPES: BEGIN OF ty_s_user,
+             name  TYPE string,
+             age   TYPE i,
+             admin TYPE abap_bool,
+           END OF ty_s_user.
+    TYPES: BEGIN OF ty_s_config,
+             host TYPE string,
+             port TYPE i,
+             user TYPE ty_s_user,
+           END OF ty_s_config.
+    TYPES ty_t_users TYPE STANDARD TABLE OF ty_s_user WITH EMPTY KEY.
+
+    DATA lv_yaml   TYPE string.
+    DATA ls_config TYPE ty_s_config.
+    DATA lt_users  TYPE ty_t_users.
+    DATA ls_user   TYPE ty_s_user.
+
+    lv_yaml =
+      |host: localhost\n| &&
+      |port: 8080\n| &&
+      |user:\n| &&
+      |  name: Bob\n| &&
+      |  age: 29\n| &&
+      |  admin: true|.
+
+    DATA(li_yaml) = zcl_ayaml=>parse( lv_yaml ).
+    li_yaml->to_abap( IMPORTING ev_data = ls_config ).
+
+    cl_abap_unit_assert=>assert_equals( exp = 'localhost' act = ls_config-host ).
+    cl_abap_unit_assert=>assert_equals( exp = 8080 act = ls_config-port ).
+    cl_abap_unit_assert=>assert_equals( exp = 'Bob' act = ls_config-user-name ).
+    cl_abap_unit_assert=>assert_equals( exp = 29 act = ls_config-user-age ).
+    cl_abap_unit_assert=>assert_true( ls_config-user-admin ).
+
+    lv_yaml =
+      |- name: UserOne\n| &&
+      |  age: 20\n| &&
+      |  admin: false\n| &&
+      |- name: UserTwo\n| &&
+      |  age: 30\n| &&
+      |  admin: true|.
+
+    li_yaml = zcl_ayaml=>parse( lv_yaml ).
+    li_yaml->to_abap( IMPORTING ev_data = lt_users ).
+
+    cl_abap_unit_assert=>assert_equals( exp = 2 act = lines( lt_users ) ).
+    READ TABLE lt_users INDEX 1 INTO ls_user.
+    cl_abap_unit_assert=>assert_equals( exp = 'UserOne' act = ls_user-name ).
+    cl_abap_unit_assert=>assert_equals( exp = 20 act = ls_user-age ).
+    READ TABLE lt_users INDEX 2 INTO ls_user.
+    cl_abap_unit_assert=>assert_equals( exp = 'UserTwo' act = ls_user-name ).
+    cl_abap_unit_assert=>assert_true( ls_user-admin ).
+  ENDMETHOD.
+
+  METHOD test_default_values.
+    DATA(li_yaml) = zcl_ayaml=>create_empty( ).
+
+    cl_abap_unit_assert=>assert_equals(
+      exp = 'fallback'
+      act = li_yaml->get_string( iv_path = '/missing' iv_default = 'fallback' ) ).
+
+    cl_abap_unit_assert=>assert_equals(
+      exp = 999
+      act = li_yaml->get_integer( iv_path = '/missing' iv_default = 999 ) ).
+
+    cl_abap_unit_assert=>assert_true(
+      li_yaml->get_boolean( iv_path = '/missing' iv_default = abap_true ) ).
+
+    li_yaml->set_null( '/null_field' ).
+    cl_abap_unit_assert=>assert_equals(
+      exp = 'default_for_null'
+      act = li_yaml->get_string( iv_path = '/null_field' iv_default = 'default_for_null' ) ).
+  ENDMETHOD.
+
+  METHOD test_sequence_helpers.
+    DATA(li_yaml) = zcl_ayaml=>create_empty( ).
+    li_yaml->ensure_sequence( '/fruits' ).
+    li_yaml->append_to_sequence( iv_path = '/fruits' iv_val = 'apple' ).
+    li_yaml->append_to_sequence( iv_path = '/fruits' iv_val = 'banana' ).
+    li_yaml->append_to_sequence( iv_path = '/fruits' iv_val = 'orange' ).
+
+    cl_abap_unit_assert=>assert_equals( exp = 3 act = li_yaml->array_length( '/fruits' ) ).
+
+    DATA(lt_fruits) = li_yaml->get_string_table( '/fruits' ).
+    cl_abap_unit_assert=>assert_equals( exp = 3 act = lines( lt_fruits ) ).
+    cl_abap_unit_assert=>assert_equals( exp = 'apple' act = lt_fruits[ 1 ] ).
+    cl_abap_unit_assert=>assert_equals( exp = 'banana' act = lt_fruits[ 2 ] ).
+    cl_abap_unit_assert=>assert_equals( exp = 'orange' act = lt_fruits[ 3 ] ).
+
+    DATA(lv_yaml) = li_yaml->to_yaml( ).
+    cl_abap_unit_assert=>assert_char_cp( exp = '*fruits:*' act = lv_yaml ).
+    cl_abap_unit_assert=>assert_char_cp( exp = '*- apple*' act = lv_yaml ).
   ENDMETHOD.
 
 ENDCLASS.
