@@ -8,6 +8,16 @@ CLASS lcl_ast_node IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD add_child.
+    FIELD-SYMBOLS <fs_child> TYPE REF TO lcl_ast_node.
+
+    IF io_child->get_key( ) IS NOT INITIAL.
+      LOOP AT mt_children ASSIGNING <fs_child>.
+        IF <fs_child>->get_key( ) = io_child->get_key( ).
+          <fs_child> = io_child.
+          RETURN.
+        ENDIF.
+      ENDLOOP.
+    ENDIF.
     INSERT io_child INTO TABLE mt_children.
   ENDMETHOD.
 
@@ -1003,6 +1013,11 @@ CLASS lcl_ast_parser IMPLEMENTATION.
         ro_node = resolve_alias( ls_tk-value ).
       WHEN zif_ayaml_types=>cs_token_type-scalar.
         ro_node = parse_scalar( ).
+      WHEN zif_ayaml_types=>cs_token_type-doc_end.
+        advance( ).
+        CREATE OBJECT ro_node
+          EXPORTING iv_node_type = zif_ayaml_types=>cs_type-null
+                    iv_value     = ``.
       WHEN OTHERS.
         RAISE EXCEPTION TYPE zcx_ayaml_error
           EXPORTING iv_msg = |Unexpected token '{ ls_tk-type }' at line { ls_tk-line }|.
@@ -1021,7 +1036,7 @@ CLASS lcl_ast_parser IMPLEMENTATION.
       advance( ).
     ENDIF.
 
-    IF is_eof( ) = abap_true.
+    IF is_eof( ) = abap_true OR current( )-type = zif_ayaml_types=>cs_token_type-doc_end.
       CREATE OBJECT ro_root
         EXPORTING iv_node_type = zif_ayaml_types=>cs_type-null
                   iv_value     = ``.
@@ -1039,6 +1054,12 @@ CLASS lcl_ast_to_nodes IMPLEMENTATION.
 
     CLEAR rt_nodes.
     IF io_root IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    IF     io_root->get_type( )               = zif_ayaml_types=>cs_type-null
+       AND io_root->get_value( )             IS INITIAL
+       AND lines( io_root->get_children( ) )  = 0.
       RETURN.
     ENDIF.
 

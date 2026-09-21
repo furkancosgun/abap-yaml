@@ -47,6 +47,10 @@ CLASS zcl_ayaml DEFINITION PUBLIC FINAL CREATE PRIVATE.
       IMPORTING iv_path        TYPE string
       RETURNING VALUE(rs_node) TYPE zif_ayaml_types=>ty_s_node.
 
+    METHODS is_missing_or_null
+      IMPORTING is_node        TYPE zif_ayaml_types=>ty_s_node
+      RETURNING VALUE(rv_miss) TYPE abap_bool.
+
     METHODS get_value_internal
       IMPORTING iv_path         TYPE string
       RETURNING VALUE(rv_value) TYPE string.
@@ -205,7 +209,7 @@ CLASS zcl_ayaml IMPLEMENTATION.
         IF sy-subrc = 0.
           IF iv_path IS NOT INITIAL.
             zif_ayaml~init_array( iv_path  = iv_path
-                                   iv_clear = abap_true ).
+                                  iv_clear = abap_true ).
           ENDIF.
           lv_idx = 0.
           LOOP AT <fs_table> ASSIGNING <fs_line>.
@@ -278,6 +282,11 @@ CLASS zcl_ayaml IMPLEMENTATION.
     ENDIF.
   ENDMETHOD.
 
+  METHOD is_missing_or_null.
+    rv_miss = boolc(    ( is_node-path IS INITIAL AND is_node-name IS INITIAL )
+                     OR is_node-type = zif_ayaml_types=>cs_type-null ).
+  ENDMETHOD.
+
   METHOD get_value_internal.
     DATA ls_node TYPE zif_ayaml_types=>ty_s_node.
 
@@ -346,15 +355,7 @@ CLASS zcl_ayaml IMPLEMENTATION.
     DATA ls_node TYPE zif_ayaml_types=>ty_s_node.
 
     ls_node = get_node_internal( iv_path ).
-    IF ls_node-path IS INITIAL AND ls_node-name IS INITIAL.
-      IF iv_default IS SUPPLIED.
-        rv_result = iv_default.
-      ELSE.
-        rv_result = ``.
-      ENDIF.
-      RETURN.
-    ENDIF.
-    IF ls_node-type = zif_ayaml_types=>cs_type-null.
+    IF is_missing_or_null( ls_node ) = abap_true.
       IF iv_default IS SUPPLIED.
         rv_result = iv_default.
       ELSE.
@@ -369,15 +370,7 @@ CLASS zcl_ayaml IMPLEMENTATION.
     DATA ls_node TYPE zif_ayaml_types=>ty_s_node.
 
     ls_node = get_node_internal( iv_path ).
-    IF ls_node-path IS INITIAL AND ls_node-name IS INITIAL.
-      IF iv_default IS SUPPLIED.
-        rv_result = iv_default.
-      ELSE.
-        rv_result = 0.
-      ENDIF.
-      RETURN.
-    ENDIF.
-    IF ls_node-type = zif_ayaml_types=>cs_type-null.
+    IF is_missing_or_null( ls_node ) = abap_true.
       IF iv_default IS SUPPLIED.
         rv_result = iv_default.
       ELSE.
@@ -392,15 +385,7 @@ CLASS zcl_ayaml IMPLEMENTATION.
     DATA ls_node TYPE zif_ayaml_types=>ty_s_node.
 
     ls_node = get_node_internal( iv_path ).
-    IF ls_node-path IS INITIAL AND ls_node-name IS INITIAL.
-      IF iv_default IS SUPPLIED.
-        rv_result = iv_default.
-      ELSE.
-        rv_result = 0.
-      ENDIF.
-      RETURN.
-    ENDIF.
-    IF ls_node-type = zif_ayaml_types=>cs_type-null.
+    IF is_missing_or_null( ls_node ) = abap_true.
       IF iv_default IS SUPPLIED.
         rv_result = iv_default.
       ELSE.
@@ -415,15 +400,7 @@ CLASS zcl_ayaml IMPLEMENTATION.
     DATA ls_node TYPE zif_ayaml_types=>ty_s_node.
 
     ls_node = get_node_internal( iv_path ).
-    IF ls_node-path IS INITIAL AND ls_node-name IS INITIAL.
-      IF iv_default IS SUPPLIED.
-        rv_result = iv_default.
-      ELSE.
-        rv_result = abap_false.
-      ENDIF.
-      RETURN.
-    ENDIF.
-    IF ls_node-type = zif_ayaml_types=>cs_type-null.
+    IF is_missing_or_null( ls_node ) = abap_true.
       IF iv_default IS SUPPLIED.
         rv_result = iv_default.
       ELSE.
@@ -438,13 +415,7 @@ CLASS zcl_ayaml IMPLEMENTATION.
     DATA ls_node TYPE zif_ayaml_types=>ty_s_node.
 
     ls_node = get_node_internal( iv_path ).
-    IF ls_node-path IS INITIAL AND ls_node-name IS INITIAL.
-      IF iv_default IS SUPPLIED.
-        rv_result = iv_default.
-      ENDIF.
-      RETURN.
-    ENDIF.
-    IF ls_node-type = zif_ayaml_types=>cs_type-null.
+    IF is_missing_or_null( ls_node ) = abap_true.
       IF iv_default IS SUPPLIED.
         rv_result = iv_default.
       ENDIF.
@@ -465,13 +436,7 @@ CLASS zcl_ayaml IMPLEMENTATION.
     DATA ls_node TYPE zif_ayaml_types=>ty_s_node.
 
     ls_node = get_node_internal( iv_path ).
-    IF ls_node-path IS INITIAL AND ls_node-name IS INITIAL.
-      IF iv_default IS SUPPLIED.
-        rv_result = iv_default.
-      ENDIF.
-      RETURN.
-    ENDIF.
-    IF ls_node-type = zif_ayaml_types=>cs_type-null.
+    IF is_missing_or_null( ls_node ) = abap_true.
       IF iv_default IS SUPPLIED.
         rv_result = iv_default.
       ENDIF.
@@ -518,7 +483,9 @@ CLASS zcl_ayaml IMPLEMENTATION.
     DATA lv_cnt  TYPE i.
 
     lv_norm = zcl_ayaml_utils=>normalize_path( iv_path ).
-    lv_norm = |{ lv_norm }/|.
+    IF lv_norm <> `/`.
+      lv_norm = |{ lv_norm }/|.
+    ENDIF.
     lv_cnt = 0.
     LOOP AT mt_nodes TRANSPORTING NO FIELDS USING KEY path_key WHERE path = lv_norm.
       lv_cnt = lv_cnt + 1.
@@ -533,7 +500,9 @@ CLASS zcl_ayaml IMPLEMENTATION.
     FIELD-SYMBOLS <fs_child> TYPE zif_ayaml_types=>ty_s_node.
 
     lv_norm = zcl_ayaml_utils=>normalize_path( iv_path ).
-    lv_norm = |{ lv_norm }/|.
+    IF lv_norm <> `/`.
+      lv_norm = |{ lv_norm }/|.
+    ENDIF.
     LOOP AT mt_nodes ASSIGNING <fs_node> USING KEY path_key WHERE path = lv_norm.
       INSERT <fs_node> INTO TABLE lt_children.
     ENDLOOP.
@@ -809,9 +778,7 @@ CLASS zcl_ayaml IMPLEMENTATION.
     DATA lv_index     TYPE i.
     DATA lv_item_path TYPE string.
     DATA lv_index_str TYPE string.
-    FIELD-SYMBOLS <fs_seq>       TYPE zif_ayaml_types=>ty_s_node.
-    " TODO: variable is assigned but never used (ABAP cleaner)
-    FIELD-SYMBOLS <fs_item_node> TYPE zif_ayaml_types=>ty_s_node.
+    FIELD-SYMBOLS <fs_seq> TYPE zif_ayaml_types=>ty_s_node.
 
     lv_norm = zcl_ayaml_utils=>normalize_path( iv_path ).
     zcl_ayaml_utils=>split_path( EXPORTING iv_path = lv_norm
@@ -848,7 +815,7 @@ CLASS zcl_ayaml IMPLEMENTATION.
           lv_index_str = |{ lv_index }|.
           lv_item_path = |{ lv_norm }/|.
           READ TABLE mt_nodes WITH KEY path = lv_item_path
-                                       name = lv_index_str ASSIGNING <fs_item_node>.
+                                       name = lv_index_str TRANSPORTING NO FIELDS.
           IF sy-subrc <> 0.
             CLEAR ls_item.
             ls_item-path  = |{ lv_norm }/|.

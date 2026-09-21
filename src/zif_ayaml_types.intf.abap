@@ -34,8 +34,6 @@ INTERFACE zif_ayaml_types PUBLIC.
     BEGIN OF cs_token_type,
       doc_start      TYPE ty_token_type VALUE 'DOC_START',
       doc_end        TYPE ty_token_type VALUE 'DOC_END',
-      directive      TYPE ty_token_type VALUE 'DIRECTIVE',
-      comment        TYPE ty_token_type VALUE 'COMMENT',
       map_key        TYPE ty_token_type VALUE 'MAP_KEY',
       map_val        TYPE ty_token_type VALUE 'MAP_VAL',
       seq_entry      TYPE ty_token_type VALUE 'SEQ_ENTRY',
@@ -46,8 +44,6 @@ INTERFACE zif_ayaml_types PUBLIC.
       flow_entry     TYPE ty_token_type VALUE 'FLOW_ENTRY',
       anchor         TYPE ty_token_type VALUE 'ANCHOR',
       alias          TYPE ty_token_type VALUE 'ALIAS',
-      literal        TYPE ty_token_type VALUE 'LITERAL',
-      folded         TYPE ty_token_type VALUE 'FOLDED',
       scalar         TYPE ty_token_type VALUE 'SCALAR',
       eof            TYPE ty_token_type VALUE 'EOF',
     END OF cs_token_type.

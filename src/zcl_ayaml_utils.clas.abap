@@ -10,10 +10,6 @@ CLASS zcl_ayaml_utils DEFINITION PUBLIC FINAL CREATE PUBLIC.
       EXPORTING ev_path TYPE string
                 ev_name TYPE string.
 
-    CLASS-METHODS get_parent_path
-      IMPORTING iv_path          TYPE string
-      RETURNING VALUE(rv_parent) TYPE string.
-
     CLASS-METHODS build_path
       IMPORTING iv_parent      TYPE string
                 iv_name        TYPE string
@@ -165,17 +161,6 @@ CLASS zcl_ayaml_utils IMPLEMENTATION.
                          len = lv_len - lv_last - 1 ).
   ENDMETHOD.
 
-  METHOD get_parent_path.
-    DATA lv_parent TYPE string.
-    " TODO: variable is assigned but never used (ABAP cleaner)
-    DATA lv_name   TYPE string.
-
-    split_path( EXPORTING iv_path = iv_path
-                IMPORTING ev_path = lv_parent
-                          ev_name = lv_name ).
-    rv_parent = lv_parent.
-  ENDMETHOD.
-
   METHOD build_path.
     DATA lv_parent_norm TYPE string.
 
@@ -300,7 +285,9 @@ CLASS zcl_ayaml_utils IMPLEMENTATION.
        OR iv_value CS cl_abap_char_utilities=>horizontal_tab
        OR iv_value CS cl_abap_char_utilities=>newline
        OR iv_value CS cl_abap_char_utilities=>cr_lf
-       OR iv_value CS `:` OR iv_value CS `#`.
+       OR iv_value CS `:` OR iv_value CS `#`
+       OR iv_value CS `[` OR iv_value CS `]`
+       OR iv_value CS `{` OR iv_value CS `}`.
       rv_plain = abap_false.
       RETURN.
     ENDIF.
@@ -313,7 +300,10 @@ CLASS zcl_ayaml_utils IMPLEMENTATION.
       lv_last = substring( val = iv_value
                            off = lv_off
                            len = 1 ).
-      IF lv_first = ` ` OR lv_last = ` `.
+      IF    lv_first = ` ` OR lv_last  = ` `
+         OR lv_first = `-` OR lv_first = `?` OR lv_first = `&` OR lv_first = `*`
+         OR lv_first = `!` OR lv_first = `|` OR lv_first = `>` OR lv_first = `'`
+         OR lv_first = `%` OR lv_first = `@` OR lv_first = '`'.
         rv_plain = abap_false.
         RETURN.
       ENDIF.
@@ -603,7 +593,8 @@ CLASS zcl_ayaml_utils IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    IF lv_tmp CO `0123456789.-+eE`.
+    FIND FIRST OCCURRENCE OF REGEX '^[-+]?(\d+(\.\d*)?|\.\d+)([eE][-+]?\d+)?$' IN lv_tmp.
+    IF sy-subrc = 0.
       ev_type = zif_ayaml_types=>cs_type-number.
       ev_value = lv_tmp.
       RETURN.
