@@ -1465,8 +1465,8 @@ CLASS ltcl_ayaml_stress_tests IMPLEMENTATION.
     DATA lv_double TYPE string.
 
     lv_yaml =
-      'msg_single: ''hello ''''world'''' from yaml''' & cl_abap_char_utilities=>newline &
-      'msg_double: "tab:\there, newline:\nthere, quote:\"ok\""' & cl_abap_char_utilities=>newline.
+      'msg_single: ''hello ''''world'''' from yaml''' && cl_abap_char_utilities=>newline &&
+      'msg_double: "tab:\there, newline:\nthere, quote:\"ok\""' && cl_abap_char_utilities=>newline.
 
     lo_cut = zcl_ayaml=>create_from_yaml( lv_yaml ).
 
