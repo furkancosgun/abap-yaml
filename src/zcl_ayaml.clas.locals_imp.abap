@@ -1369,7 +1369,7 @@ CLASS lcl_deserializer IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD map_table.
-    DATA lo_line_descr TYPE REF TO cl_abap_typedescr.
+    DATA lo_line_descr TYPE REF TO cl_abap_datadescr.
     DATA lt_children   TYPE zif_ayaml_types=>ty_t_nodes_flat.
     DATA lr_line       TYPE REF TO data.
     DATA lv_item_path  TYPE string.
