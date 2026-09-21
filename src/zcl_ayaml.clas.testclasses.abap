@@ -680,6 +680,11 @@ CLASS ltcl_ayaml_new_architecture DEFINITION FINAL FOR TESTING RISK LEVEL HARMLE
     METHODS test_to_abap_deserializer FOR TESTING RAISING cx_static_check.
     METHODS test_default_values FOR TESTING RAISING cx_static_check.
     METHODS test_sequence_helpers FOR TESTING RAISING cx_static_check.
+    METHODS test_from_abap_camel_case FOR TESTING RAISING cx_static_check.
+    METHODS test_from_abap_snake_case FOR TESTING RAISING cx_static_check.
+    METHODS test_from_abap_tables FOR TESTING RAISING cx_static_check.
+    METHODS test_to_abap_flexible_casing FOR TESTING RAISING cx_static_check.
+    METHODS test_bidirectional_roundtrip FOR TESTING RAISING cx_static_check.
 ENDCLASS.
 
 
@@ -805,6 +810,107 @@ CLASS ltcl_ayaml_new_architecture IMPLEMENTATION.
     DATA(lv_yaml) = li_yaml->to_yaml( ).
     cl_abap_unit_assert=>assert_char_cp( exp = '*fruits:*' act = lv_yaml ).
     cl_abap_unit_assert=>assert_char_cp( exp = '*- apple*' act = lv_yaml ).
+  ENDMETHOD.
+
+  METHOD test_from_abap_camel_case.
+    TYPES: BEGIN OF ty_s_user_profile,
+             first_name   TYPE string,
+             phone_number TYPE string,
+             is_active    TYPE abap_bool,
+           END OF ty_s_user_profile.
+    DATA ls_user TYPE ty_s_user_profile.
+    ls_user-first_name = 'John'.
+    ls_user-phone_number = '555-1234'.
+    ls_user-is_active = abap_true.
+
+    DATA(lv_yaml) = zcl_ayaml=>from_abap(
+      iv_data   = ls_user
+      iv_format = zif_ayaml_types=>cs_format-camel_case ).
+
+    cl_abap_unit_assert=>assert_char_cp( exp = '*firstName: John*' act = lv_yaml ).
+    cl_abap_unit_assert=>assert_char_cp( exp = '*phoneNumber: 555-1234*' act = lv_yaml ).
+    cl_abap_unit_assert=>assert_char_cp( exp = '*isActive: true*' act = lv_yaml ).
+  ENDMETHOD.
+
+  METHOD test_from_abap_snake_case.
+    TYPES: BEGIN OF ty_s_settings,
+             max_connections TYPE i,
+             api_token       TYPE string,
+           END OF ty_s_settings.
+    DATA ls_settings TYPE ty_s_settings.
+    ls_settings-max_connections = 100.
+    ls_settings-api_token = 'secret'.
+
+    DATA(lv_yaml) = zcl_ayaml=>from_abap(
+      iv_data   = ls_settings
+      iv_format = zif_ayaml_types=>cs_format-snake_case ).
+
+    cl_abap_unit_assert=>assert_char_cp( exp = '*max_connections: 100*' act = lv_yaml ).
+    cl_abap_unit_assert=>assert_char_cp( exp = '*api_token: secret*' act = lv_yaml ).
+  ENDMETHOD.
+
+  METHOD test_from_abap_tables.
+    TYPES: BEGIN OF ty_s_item,
+             item_id   TYPE i,
+             item_name TYPE string,
+           END OF ty_s_item.
+    DATA lt_items TYPE STANDARD TABLE OF ty_s_item WITH EMPTY KEY.
+    INSERT VALUE #( item_id = 1 item_name = 'Alpha' ) INTO TABLE lt_items.
+    INSERT VALUE #( item_id = 2 item_name = 'Beta' ) INTO TABLE lt_items.
+
+    DATA(lv_yaml) = zcl_ayaml=>from_abap(
+      iv_data   = lt_items
+      iv_format = zif_ayaml_types=>cs_format-camel_case ).
+
+    cl_abap_unit_assert=>assert_char_cp( exp = '*- itemId: 1*' act = lv_yaml ).
+    cl_abap_unit_assert=>assert_char_cp( exp = '*itemName: Alpha*' act = lv_yaml ).
+  ENDMETHOD.
+
+  METHOD test_to_abap_flexible_casing.
+    TYPES: BEGIN OF ty_s_payload,
+             first_name TYPE string,
+             last_name  TYPE string,
+             user_age   TYPE i,
+           END OF ty_s_payload.
+    DATA ls_payload TYPE ty_s_payload.
+    DATA lv_yaml    TYPE string.
+
+    lv_yaml =
+      |firstName: Alice\n| &&
+      |last_name: Smith\n| &&
+      |USER_AGE: 28\n|.
+
+    DATA(li_yaml) = zcl_ayaml=>parse( lv_yaml ).
+    li_yaml->to_abap( IMPORTING ev_data = ls_payload ).
+
+    cl_abap_unit_assert=>assert_equals( exp = 'Alice' act = ls_payload-first_name ).
+    cl_abap_unit_assert=>assert_equals( exp = 'Smith' act = ls_payload-last_name ).
+    cl_abap_unit_assert=>assert_equals( exp = 28 act = ls_payload-user_age ).
+  ENDMETHOD.
+
+  METHOD test_bidirectional_roundtrip.
+    TYPES: BEGIN OF ty_s_rec,
+             server_host TYPE string,
+             server_port TYPE i,
+             is_secured  TYPE abap_bool,
+           END OF ty_s_rec.
+    DATA ls_in  TYPE ty_s_rec.
+    DATA ls_out TYPE ty_s_rec.
+
+    ls_in-server_host = 'api.internal'.
+    ls_in-server_port = 443.
+    ls_in-is_secured  = abap_true.
+
+    DATA(lv_yaml) = zcl_ayaml=>from_abap(
+      iv_data   = ls_in
+      iv_format = zif_ayaml_types=>cs_format-camel_case ).
+
+    DATA(li_yaml) = zcl_ayaml=>parse( lv_yaml ).
+    li_yaml->to_abap( IMPORTING ev_data = ls_out ).
+
+    cl_abap_unit_assert=>assert_equals( exp = ls_in-server_host act = ls_out-server_host ).
+    cl_abap_unit_assert=>assert_equals( exp = ls_in-server_port act = ls_out-server_port ).
+    cl_abap_unit_assert=>assert_equals( exp = ls_in-is_secured act = ls_out-is_secured ).
   ENDMETHOD.
 
 ENDCLASS.

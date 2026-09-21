@@ -48,6 +48,14 @@ CLASS zcl_ayaml DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING VALUE(ri_ayaml) TYPE REF TO zif_ayaml
       RAISING   zcx_ayaml_error.
 
+    CLASS-METHODS from_abap
+      IMPORTING iv_data         TYPE any
+                iv_format       TYPE zif_ayaml_types=>ty_format OPTIONAL
+                iv_indent       TYPE i                          DEFAULT 0
+                iv_ignore_empty TYPE abap_bool                  DEFAULT abap_false
+      RETURNING VALUE(rv_yaml)  TYPE string
+      RAISING   zcx_ayaml_error.
+
     METHODS constructor
       IMPORTING it_nodes TYPE zif_ayaml_types=>ty_t_nodes OPTIONAL.
 
@@ -58,8 +66,9 @@ CLASS zcl_ayaml DEFINITION PUBLIC FINAL CREATE PUBLIC.
       IMPORTING iv_full_path TYPE string.
 
     METHODS set_recursive
-      IMPORTING iv_path TYPE string
-                iv_val  TYPE any
+      IMPORTING iv_path   TYPE string
+                iv_val    TYPE any
+                iv_format TYPE zif_ayaml_types=>ty_format OPTIONAL
       RAISING   zcx_ayaml_error.
 
     METHODS get_next_index
@@ -120,6 +129,28 @@ CLASS zcl_ayaml IMPLEMENTATION.
     ri_ayaml = NEW zcl_ayaml( it_nodes = lt_nodes ).
   ENDMETHOD.
 
+  METHOD from_abap.
+    DATA lo_ayaml TYPE REF TO zcl_ayaml.
+    DATA lo_descr TYPE REF TO cl_abap_typedescr.
+
+    lo_ayaml = NEW zcl_ayaml( ).
+    lo_descr = cl_abap_typedescr=>describe_by_data( iv_data ).
+
+    IF lo_descr->kind = cl_abap_typedescr=>kind_struct OR lo_descr->kind = cl_abap_typedescr=>kind_table.
+      lo_ayaml->set_recursive(
+        iv_path   = ``
+        iv_val    = iv_data
+        iv_format = iv_format ).
+    ELSE.
+      lo_ayaml->zif_ayaml_writer~set(
+        iv_path         = `/value`
+        iv_val          = iv_data
+        iv_ignore_empty = iv_ignore_empty ).
+    ENDIF.
+
+    rv_yaml = lo_ayaml->zif_ayaml_reader~to_yaml( iv_indent = iv_indent ).
+  ENDMETHOD.
+
   METHOD set_typed.
     zif_ayaml_writer~set(
       iv_path         = iv_path
@@ -167,14 +198,19 @@ CLASS zcl_ayaml IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD set_recursive.
-    DATA lo_descr    TYPE REF TO cl_abap_typedescr.
-    DATA lo_struct   TYPE REF TO cl_abap_structdescr.
-    DATA lt_comps    TYPE abap_component_tab.
+    DATA lo_descr     TYPE REF TO cl_abap_typedescr.
+    DATA lo_struct    TYPE REF TO cl_abap_structdescr.
+    DATA lt_comps     TYPE abap_component_tab.
     DATA lv_comp_path TYPE string.
-    FIELD-SYMBOLS <ls_comp>  TYPE abap_componentdescr.
-    FIELD-SYMBOLS <lv_field> TYPE any.
-    FIELD-SYMBOLS <lt_table> TYPE STANDARD TABLE.
-    FIELD-SYMBOLS <lv_line>  TYPE any.
+    DATA lv_f_name    TYPE string.
+    DATA lv_idx       TYPE i.
+    DATA lv_item_path TYPE string.
+    DATA lv_target_parent TYPE string.
+    FIELD-SYMBOLS <ls_comp>      TYPE abap_componentdescr.
+    FIELD-SYMBOLS <lv_field>     TYPE any.
+    FIELD-SYMBOLS <lt_table>     TYPE STANDARD TABLE.
+    FIELD-SYMBOLS <lv_line>      TYPE any.
+    FIELD-SYMBOLS <ls_item_node> TYPE zif_ayaml_types=>ty_s_node.
 
     lo_descr = cl_abap_typedescr=>describe_by_data( iv_val ).
     CASE lo_descr->kind.
@@ -184,16 +220,52 @@ CLASS zcl_ayaml IMPLEMENTATION.
         LOOP AT lt_comps ASSIGNING <ls_comp>.
           ASSIGN COMPONENT <ls_comp>-name OF STRUCTURE iv_val TO <lv_field>.
           IF sy-subrc = 0.
-            lv_comp_path = |{ iv_path }/{ to_lower( <ls_comp>-name ) }|.
-            set_recursive( iv_path = lv_comp_path iv_val = <lv_field> ).
+            lv_f_name = zcl_ayaml_utils=>format_field_name(
+              iv_name   = CONV string( <ls_comp>-name )
+              iv_format = iv_format ).
+            IF iv_path IS INITIAL.
+              lv_comp_path = |/{ lv_f_name }|.
+            ELSE.
+              lv_comp_path = |{ iv_path }/{ lv_f_name }|.
+            ENDIF.
+            set_recursive( iv_path   = lv_comp_path
+                           iv_val    = <lv_field>
+                           iv_format = iv_format ).
           ENDIF.
         ENDLOOP.
       WHEN cl_abap_typedescr=>kind_table.
         ASSIGN iv_val TO <lt_table>.
         IF sy-subrc = 0.
-          zif_ayaml_writer~ensure_sequence( iv_path = iv_path iv_clear = abap_true ).
+          IF iv_path IS NOT INITIAL.
+            zif_ayaml_writer~ensure_sequence( iv_path = iv_path iv_clear = abap_true ).
+          ENDIF.
+          lv_idx = 0.
           LOOP AT <lt_table> ASSIGNING <lv_line>.
-            zif_ayaml_writer~append_to_sequence( iv_path = iv_path iv_val = <lv_line> ).
+            lv_idx += 1.
+            DATA(lo_line_descr) = cl_abap_typedescr=>describe_by_data( <lv_line> ).
+            IF lo_line_descr->kind = cl_abap_typedescr=>kind_struct OR lo_line_descr->kind = cl_abap_typedescr=>kind_table.
+              IF iv_path IS INITIAL.
+                lv_item_path = |/{ lv_idx }|.
+              ELSE.
+                lv_item_path = |{ iv_path }/{ lv_idx }|.
+              ENDIF.
+              set_recursive( iv_path   = lv_item_path
+                             iv_val    = <lv_line>
+                             iv_format = iv_format ).
+              lv_target_parent = COND #( WHEN iv_path IS INITIAL THEN `/` ELSE |{ iv_path }/| ).
+              READ TABLE mt_nodes WITH KEY path = lv_target_parent
+                                           name = |{ lv_idx }| ASSIGNING <ls_item_node>.
+              IF sy-subrc = 0.
+                <ls_item_node>-index = lv_idx.
+              ENDIF.
+            ELSE.
+              IF iv_path IS INITIAL.
+                zif_ayaml_writer~ensure_sequence( iv_path = `/` ).
+                zif_ayaml_writer~append_to_sequence( iv_path = `/` iv_val = <lv_line> ).
+              ELSE.
+                zif_ayaml_writer~append_to_sequence( iv_path = iv_path iv_val = <lv_line> ).
+              ENDIF.
+            ENDIF.
           ENDLOOP.
         ENDIF.
       WHEN OTHERS.

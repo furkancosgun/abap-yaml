@@ -62,4 +62,15 @@ INTERFACE zif_ayaml_types PUBLIC.
 
   TYPES ty_t_tokens TYPE STANDARD TABLE OF ty_s_token WITH EMPTY KEY.
 
+  TYPES ty_format TYPE string.
+
+  CONSTANTS:
+    BEGIN OF cs_format,
+      default    TYPE ty_format VALUE 'default',
+      camel_case TYPE ty_format VALUE 'camel_case',
+      snake_case TYPE ty_format VALUE 'snake_case',
+      lower_case TYPE ty_format VALUE 'lower_case',
+      upper_case TYPE ty_format VALUE 'upper_case',
+    END OF cs_format.
+
 ENDINTERFACE.

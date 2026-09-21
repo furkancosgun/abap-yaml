@@ -1216,6 +1216,12 @@ CLASS lcl_deserializer IMPLEMENTATION.
 
       READ TABLE it_nodes WITH KEY path = iv_path name = to_lower( ls_comp-name ) INTO ls_node.
       IF sy-subrc <> 0.
+        READ TABLE it_nodes WITH KEY path = iv_path name = zcl_ayaml_utils=>to_camel_case( ls_comp-name ) INTO ls_node.
+      ENDIF.
+      IF sy-subrc <> 0.
+        READ TABLE it_nodes WITH KEY path = iv_path name = zcl_ayaml_utils=>to_snake_case( ls_comp-name ) INTO ls_node.
+      ENDIF.
+      IF sy-subrc <> 0.
         READ TABLE it_nodes WITH KEY path = iv_path name = ls_comp-name INTO ls_node.
       ENDIF.
 

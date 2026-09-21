@@ -77,6 +77,19 @@ CLASS zcl_ayaml_utils DEFINITION PUBLIC FINAL CREATE PUBLIC.
       RETURNING VALUE(rv_timestamp) TYPE timestamp
       RAISING   zcx_ayaml_error.
 
+    CLASS-METHODS to_camel_case
+      IMPORTING iv_name        TYPE string
+      RETURNING VALUE(rv_name) TYPE string.
+
+    CLASS-METHODS to_snake_case
+      IMPORTING iv_name        TYPE string
+      RETURNING VALUE(rv_name) TYPE string.
+
+    CLASS-METHODS format_field_name
+      IMPORTING iv_name        TYPE string
+                iv_format      TYPE zif_ayaml_types=>ty_format OPTIONAL
+      RETURNING VALUE(rv_name) TYPE string.
+
 ENDCLASS.
 
 
@@ -183,7 +196,8 @@ CLASS zcl_ayaml_utils IMPLEMENTATION.
     DATA lv_len    TYPE i.
 
     IF iv_path = `/`.
-      rv_yes = abap_false.
+      READ TABLE it_nodes WITH KEY path_key COMPONENTS path = `/` INTO ls_node.
+      rv_yes = xsdbool( sy-subrc = 0 AND ls_node-index > 0 ).
       RETURN.
     ENDIF.
     lv_trim = iv_path.
@@ -536,6 +550,91 @@ CLASS zcl_ayaml_utils IMPLEMENTATION.
     ENDTRY.
     ev_type = zif_ayaml_types=>cs_type-string.
     ev_value = lv_tmp.
+  ENDMETHOD.
+
+  METHOD to_camel_case.
+    DATA lt_parts TYPE string_table.
+    DATA lv_part  TYPE string.
+    DATA lv_first TYPE abap_bool.
+    DATA lv_len   TYPE i.
+
+    IF iv_name CS `_`.
+      SPLIT iv_name AT `_` INTO TABLE lt_parts.
+      lv_first = abap_true.
+      LOOP AT lt_parts INTO lv_part.
+        IF lv_part IS INITIAL.
+          CONTINUE.
+        ENDIF.
+        IF lv_first = abap_true.
+          rv_name = to_lower( lv_part ).
+          lv_first = abap_false.
+        ELSE.
+          DATA(lv_head) = to_upper( substring( val = lv_part off = 0 len = 1 ) ).
+          DATA(lv_tail) = to_lower( substring( val = lv_part off = 1 ) ).
+          rv_name = |{ rv_name }{ lv_head }{ lv_tail }|.
+        ENDIF.
+      ENDLOOP.
+    ELSE.
+      lv_len = strlen( iv_name ).
+      IF lv_len > 0.
+        IF iv_name = to_upper( iv_name ).
+          rv_name = to_lower( iv_name ).
+        ELSE.
+          DATA(lv_first_char) = to_lower( substring( val = iv_name off = 0 len = 1 ) ).
+          rv_name = |{ lv_first_char }{ substring( val = iv_name off = 1 ) }|.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD to_snake_case.
+    DATA lv_len  TYPE i.
+    DATA lv_idx  TYPE i.
+    DATA lv_char TYPE string.
+
+    IF iv_name CS `_`.
+      rv_name = to_lower( iv_name ).
+      RETURN.
+    ENDIF.
+
+    lv_len = strlen( iv_name ).
+    IF lv_len = 0.
+      RETURN.
+    ENDIF.
+
+    IF iv_name = to_upper( iv_name ).
+      rv_name = to_lower( iv_name ).
+      RETURN.
+    ENDIF.
+
+    DO lv_len TIMES.
+      lv_idx = sy-index - 1.
+      lv_char = substring( val = iv_name off = lv_idx len = 1 ).
+      IF lv_char >= `A` AND lv_char <= `Z`.
+        IF lv_idx > 0.
+          rv_name = |{ rv_name }_{ to_lower( lv_char ) }|.
+        ELSE.
+          rv_name = to_lower( lv_char ).
+        ENDIF.
+      ELSE.
+        rv_name = |{ rv_name }{ lv_char }|.
+      ENDIF.
+    ENDDO.
+  ENDMETHOD.
+
+  METHOD format_field_name.
+    CASE iv_format.
+      WHEN zif_ayaml_types=>cs_format-camel_case.
+        rv_name = to_camel_case( iv_name ).
+      WHEN zif_ayaml_types=>cs_format-snake_case.
+        rv_name = to_snake_case( iv_name ).
+      WHEN zif_ayaml_types=>cs_format-upper_case.
+        rv_name = to_upper( iv_name ).
+      WHEN zif_ayaml_types=>cs_format-lower_case OR zif_ayaml_types=>cs_format-default.
+        rv_name = to_lower( iv_name ).
+      WHEN OTHERS.
+        rv_name = to_lower( iv_name ).
+    ENDCASE.
   ENDMETHOD.
 
 ENDCLASS.
