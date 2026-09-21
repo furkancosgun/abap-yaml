@@ -1187,7 +1187,7 @@ CLASS lcl_serializer IMPLEMENTATION.
     FIELD-SYMBOLS <fs_node>  TYPE zif_ayaml_types=>ty_s_node.
     FIELD-SYMBOLS <fs_child> TYPE zif_ayaml_types=>ty_s_node.
 
-    LOOP AT it_nodes ASSIGNING <fs_node> USING KEY path_key WHERE path = iv_path.
+    LOOP AT it_nodes ASSIGNING <fs_node> WHERE path = iv_path.
       INSERT <fs_node> INTO TABLE lt_children.
     ENDLOOP.
 
@@ -1385,7 +1385,7 @@ CLASS lcl_deserializer IMPLEMENTATION.
     ENDIF.
     CLEAR <fs_tab>.
 
-    LOOP AT it_nodes ASSIGNING <fs_node> USING KEY path_key WHERE path = iv_path.
+    LOOP AT it_nodes ASSIGNING <fs_node> WHERE path = iv_path.
       INSERT <fs_node> INTO TABLE lt_children.
     ENDLOOP.
     SORT lt_children BY order.

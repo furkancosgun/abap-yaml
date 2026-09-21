@@ -257,7 +257,7 @@ CLASS zcl_ayaml IMPLEMENTATION.
     FIELD-SYMBOLS <fs_node> TYPE zif_ayaml_types=>ty_s_node.
 
     lv_max = 0.
-    LOOP AT mt_nodes ASSIGNING <fs_node> USING KEY path_key WHERE path = iv_path.
+    LOOP AT mt_nodes ASSIGNING <fs_node> WHERE path = iv_path.
       IF <fs_node>-index > lv_max.
         lv_max = <fs_node>-index.
       ENDIF.
@@ -473,7 +473,7 @@ CLASS zcl_ayaml IMPLEMENTATION.
       lv_norm = |{ lv_norm }/|.
     ENDIF.
 
-    LOOP AT mt_nodes ASSIGNING <fs_node> USING KEY path_key WHERE path = lv_norm.
+    LOOP AT mt_nodes ASSIGNING <fs_node> WHERE path = lv_norm.
       INSERT <fs_node>-name INTO TABLE rt_result.
     ENDLOOP.
   ENDMETHOD.
@@ -487,7 +487,7 @@ CLASS zcl_ayaml IMPLEMENTATION.
       lv_norm = |{ lv_norm }/|.
     ENDIF.
     lv_cnt = 0.
-    LOOP AT mt_nodes TRANSPORTING NO FIELDS USING KEY path_key WHERE path = lv_norm.
+    LOOP AT mt_nodes TRANSPORTING NO FIELDS WHERE path = lv_norm.
       lv_cnt = lv_cnt + 1.
     ENDLOOP.
     rv_result = lv_cnt.
@@ -503,7 +503,7 @@ CLASS zcl_ayaml IMPLEMENTATION.
     IF lv_norm <> `/`.
       lv_norm = |{ lv_norm }/|.
     ENDIF.
-    LOOP AT mt_nodes ASSIGNING <fs_node> USING KEY path_key WHERE path = lv_norm.
+    LOOP AT mt_nodes ASSIGNING <fs_node> WHERE path = lv_norm.
       INSERT <fs_node> INTO TABLE lt_children.
     ENDLOOP.
     SORT lt_children BY order.

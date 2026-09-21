@@ -191,7 +191,7 @@ CLASS zcl_ayaml_utils IMPLEMENTATION.
     FIELD-SYMBOLS <fs_node> TYPE zif_ayaml_types=>ty_s_node.
 
     IF iv_path = `/`.
-      READ TABLE it_nodes WITH KEY path_key COMPONENTS path = `/` ASSIGNING <fs_node>.
+      READ TABLE it_nodes WITH KEY path = `/` ASSIGNING <fs_node>.
       IF sy-subrc = 0 AND <fs_node>-index > 0.
         rv_yes = abap_true.
       ELSE.
@@ -464,6 +464,7 @@ CLASS zcl_ayaml_utils IMPLEMENTATION.
     DATA lv_date         TYPE d.
     DATA lv_time         TYPE t.
     DATA lv_timestamp    TYPE timestamp.
+    DATA lv_tstmpl       TYPE tzntstmpl.
     DATA lv_sign         TYPE string.
     DATA lv_off_h        TYPE string.
     DATA lv_off_m        TYPE string.
@@ -516,12 +517,13 @@ CLASS zcl_ayaml_utils IMPLEMENTATION.
       TRY.
           CASE lv_sign.
             WHEN '-'.
-              lv_timestamp = cl_abap_tstmp=>add( tstmp = lv_timestamp
-                                                 secs  = lv_seconds_conv ).
+              lv_tstmpl = cl_abap_tstmp=>add( tstmp = lv_timestamp
+                                              secs  = lv_seconds_conv ).
             WHEN '+'.
-              lv_timestamp = cl_abap_tstmp=>subtractsecs( tstmp = lv_timestamp
-                                                          secs  = lv_seconds_conv ).
+              lv_tstmpl = cl_abap_tstmp=>subtractsecs( tstmp = lv_timestamp
+                                                      secs  = lv_seconds_conv ).
           ENDCASE.
+          lv_timestamp = cl_abap_tstmp=>move_to_short( lv_tstmpl ).
         CATCH cx_parameter_invalid_range
               cx_parameter_invalid_type.
           RAISE EXCEPTION TYPE zcx_ayaml_error

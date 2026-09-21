@@ -23,8 +23,7 @@ INTERFACE zif_ayaml_types PUBLIC.
       order TYPE i,
     END OF ty_s_node.
 
-  TYPES ty_t_nodes      TYPE SORTED TABLE OF ty_s_node WITH UNIQUE KEY path name
-                   WITH NON-UNIQUE SORTED KEY path_key COMPONENTS path.
+  TYPES ty_t_nodes      TYPE SORTED TABLE OF ty_s_node WITH UNIQUE KEY path name.
   TYPES ty_t_nodes_flat TYPE STANDARD TABLE OF ty_s_node WITH DEFAULT KEY.
   TYPES ty_t_string     TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
 
